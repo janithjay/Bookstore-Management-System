@@ -1,7 +1,7 @@
 # Bookstore Management System - Requirements
 
-# Core simulation framework
-mesa>=2.1.0
+# Core simulation framework - Mesa 3.0+ for latest agent-based modeling
+mesa>=3.0.0
 
 # Data handling and analytics
 pandas>=1.5.0
@@ -32,7 +32,7 @@ sphinx-rtd-theme>=1.2.0
 python-dateutil>=2.8.0
 pydantic>=1.10.0
 
-# Optional: For GUI visualization
+# Optional: For GUI visualization (install with: pip install --pre mesa[viz])
 # mesa-viz-tornado>=0.1.0
 
 # Optional: For advanced analytics

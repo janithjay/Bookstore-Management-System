@@ -36,7 +36,8 @@ class EmployeeAgent(Agent):
             model: The Mesa model instance
             employee_data: Employee ontology data
         """
-        super().__init__(unique_id, model)
+        super().__init__(model)
+        self.unique_id = unique_id
         self.employee_data = employee_data
         
         # Work state attributes

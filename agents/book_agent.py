@@ -34,7 +34,8 @@ class BookAgent(Agent):
             model: The Mesa model instance
             book_data: Book ontology data
         """
-        super().__init__(unique_id, model)
+        super().__init__(model)
+        self.unique_id = unique_id
         self.book_data = book_data
         
         # Market dynamics attributes

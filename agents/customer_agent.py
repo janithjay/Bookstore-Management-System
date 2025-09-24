@@ -36,7 +36,8 @@ class CustomerAgent(Agent):
             model: The Mesa model instance
             customer_data: Customer ontology data
         """
-        super().__init__(unique_id, model)
+        super().__init__(model)
+        self.unique_id = unique_id
         self.customer_data = customer_data
         
         # Behavioral attributes
