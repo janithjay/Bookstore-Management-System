@@ -3,6 +3,9 @@
 # Core simulation framework - Mesa 3.0+ for latest agent-based modeling
 mesa>=3.0.0
 
+# Ontology framework - Owlready2 for ontology-based modeling
+owlready2>=0.44
+
 # Data handling and analytics
 pandas>=1.5.0
 numpy>=1.24.0

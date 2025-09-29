@@ -3,7 +3,8 @@ Book Agent
 
 This module implements the book agent for the bookstore management system.
 Book agents represent individual books with behaviors like demand simulation,
-pricing dynamics, and popularity tracking.
+pricing dynamics, and popularity tracking. Includes message bus integration
+for inventory alerts and price updates.
 """
 
 import random
@@ -12,6 +13,7 @@ from mesa import Agent
 from datetime import datetime, timedelta
 
 from ontology.bookstore_ontology import Book, BookCategory, bookstore_ontology
+from communication.message_bus import message_bus, MessageType, Message
 
 
 class BookAgent(Agent):
@@ -37,6 +39,10 @@ class BookAgent(Agent):
         super().__init__(model)
         self.unique_id = unique_id
         self.book_data = book_data
+        
+        # Register with message bus
+        agent_id = f"book_{book_data.isbn}"
+        message_bus.register_agent(agent_id)
         
         # Market dynamics attributes
         self.base_demand = self._calculate_base_demand()
@@ -147,8 +153,8 @@ class BookAgent(Agent):
         # Update pricing if needed
         self._update_pricing()
         
-        # Check inventory levels
-        self._check_inventory()
+        # Check inventory levels and send alerts if needed
+        self._check_inventory_and_alert()
         
         # Update popularity based on sales
         self._update_popularity()
@@ -167,6 +173,132 @@ class BookAgent(Agent):
             self.days_out_of_stock += 1
         else:
             self.days_out_of_stock = 0
+    
+    def _check_inventory_and_alert(self):
+        """Check inventory levels and send alerts using message bus"""
+        stock_level = self.book_data.stock_quantity
+        
+        # Send low stock alert if stock is below threshold
+        if stock_level <= 5 and stock_level > 0:
+            message_bus.publish(
+                f"book_{self.book_data.isbn}",
+                MessageType.LOW_STOCK_ALERT,
+                {
+                    'isbn': self.book_data.isbn,
+                    'title': self.book_data.title,
+                    'current_stock': stock_level,
+                    'threshold': 5,
+                    'reorder_quantity': 20,
+                    'urgency': 'medium' if stock_level > 2 else 'high'
+                },
+                priority=3 if stock_level > 2 else 4
+            )
+        
+        # Send out of stock alert
+        elif stock_level == 0:
+            message_bus.publish(
+                f"book_{self.book_data.isbn}",
+                MessageType.LOW_STOCK_ALERT,
+                {
+                    'isbn': self.book_data.isbn,
+                    'title': self.book_data.title,
+                    'current_stock': 0,
+                    'status': 'out_of_stock',
+                    'reorder_quantity': 30,
+                    'urgency': 'critical'
+                },
+                priority=5
+            )
+    
+    def process_sale(self, quantity: int = 1) -> bool:
+        """
+        Process a book sale and apply SWRL rules
+        
+        Args:
+            quantity: Number of books sold
+            
+        Returns:
+            True if sale successful, False otherwise
+        """
+        if self.book_data.stock_quantity >= quantity:
+            # Apply SWRL rule for purchase reducing stock
+            if hasattr(bookstore_ontology, 'owl_ontology') and bookstore_ontology.owl_ontology:
+                rule_result = bookstore_ontology.owl_ontology.apply_swrl_rule(
+                    'purchase_reduces_stock',
+                    customer_id='current_customer',  # This would be passed from customer agent
+                    book_isbn=self.book_data.isbn,
+                    quantity=quantity
+                )
+            
+            # Update stock
+            self.book_data.stock_quantity -= quantity
+            self.daily_sales += quantity
+            self.weekly_sales += quantity
+            self.total_sales += quantity
+            
+            # Send inventory update message
+            message_bus.publish(
+                f"book_{self.book_data.isbn}",
+                MessageType.INVENTORY_UPDATE,
+                {
+                    'isbn': self.book_data.isbn,
+                    'action': 'sale',
+                    'quantity_sold': quantity,
+                    'new_stock': self.book_data.stock_quantity,
+                    'title': self.book_data.title
+                }
+            )
+            
+            return True
+        return False
+    
+    def restock(self, quantity: int) -> None:
+        """
+        Restock the book
+        
+        Args:
+            quantity: Number of books to add to stock
+        """
+        self.book_data.stock_quantity += quantity
+        
+        # Send inventory update message
+        message_bus.publish(
+            f"book_{self.book_data.isbn}",
+            MessageType.INVENTORY_UPDATE,
+            {
+                'isbn': self.book_data.isbn,
+                'action': 'restock',
+                'quantity_added': quantity,
+                'new_stock': self.book_data.stock_quantity,
+                'title': self.book_data.title
+            }
+        )
+        
+        print(f"Restocked {quantity} copies of '{self.book_data.title}'. New stock: {self.book_data.stock_quantity}")
+    
+    def update_price(self, new_price: float) -> None:
+        """
+        Update book price and notify interested parties
+        
+        Args:
+            new_price: New price for the book
+        """
+        old_price = self.book_data.price
+        self.book_data.price = new_price
+        
+        # Send price update message
+        message_bus.publish(
+            f"book_{self.book_data.isbn}",
+            MessageType.PRICE_UPDATE,
+            {
+                'isbn': self.book_data.isbn,
+                'title': self.book_data.title,
+                'old_price': old_price,
+                'new_price': new_price,
+                'price_change': new_price - old_price,
+                'change_percentage': ((new_price - old_price) / old_price) * 100
+            }
+        )
     
     def _update_demand(self):
         """Update current demand based on various factors"""

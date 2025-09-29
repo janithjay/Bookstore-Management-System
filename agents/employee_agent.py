@@ -4,6 +4,7 @@ Employee Agent
 This module implements the employee agent for the bookstore management system.
 Employee agents represent staff members with different roles and responsibilities
 like processing transactions, helping customers, and managing inventory.
+Includes message bus integration for agent communication.
 """
 
 import random
@@ -14,6 +15,7 @@ from datetime import datetime
 from ontology.bookstore_ontology import (
     Employee, EmployeeRole, bookstore_ontology
 )
+from communication.message_bus import message_bus, MessageType, Message
 
 
 class EmployeeAgent(Agent):
@@ -39,6 +41,19 @@ class EmployeeAgent(Agent):
         super().__init__(model)
         self.unique_id = unique_id
         self.employee_data = employee_data
+        
+        # Register with message bus
+        agent_id = f"employee_{unique_id}"
+        message_bus.register_agent(agent_id)
+        
+        # Subscribe to relevant message types based on role
+        message_bus.subscribe(agent_id, MessageType.RESTOCK_REQUEST, self._handle_restock_request)
+        message_bus.subscribe(agent_id, MessageType.CUSTOMER_INQUIRY, self._handle_customer_inquiry)
+        message_bus.subscribe(agent_id, MessageType.EMPLOYEE_ASSIGNMENT, self._handle_assignment)
+        
+        # Inventory clerks and managers get low stock alerts
+        if employee_data.role in [EmployeeRole.INVENTORY_CLERK, EmployeeRole.MANAGER]:
+            message_bus.subscribe(agent_id, MessageType.LOW_STOCK_ALERT, self._handle_low_stock_alert)
         
         # Work state attributes
         self.is_busy = False
@@ -97,6 +112,10 @@ class EmployeeAgent(Agent):
         """Execute one step of employee behavior"""
         self.hours_worked += 1/60  # Assuming each step is roughly 1 minute
         
+        # Process messages from other agents
+        agent_id = f"employee_{self.unique_id}"
+        message_bus.process_messages(agent_id)
+        
         if self.hours_worked >= self.shift_hours:
             self._end_shift()
             return
@@ -113,6 +132,94 @@ class EmployeeAgent(Agent):
         # Look for work to do
         if not self.is_busy:
             self._find_work()
+    
+    def _handle_restock_request(self, message: Message):
+        """Handle restock request messages"""
+        isbn = message.content.get('isbn')
+        current_stock = message.content.get('current_stock', 0)
+        reorder_quantity = message.content.get('reorder_quantity', 10)
+        
+        # Only inventory clerks and managers handle restock requests
+        if self.employee_data.role in [EmployeeRole.INVENTORY_CLERK, EmployeeRole.MANAGER]:
+            if not self.is_busy:
+                self._start_restocking_task(isbn, reorder_quantity)
+            else:
+                # Queue the task for later
+                print(f"Employee {self.unique_id} will handle restock for {isbn} after current task")
+    
+    def _handle_customer_inquiry(self, message: Message):
+        """Handle customer inquiry messages"""
+        customer_id = message.content.get('customer_id')
+        inquiry_type = message.content.get('inquiry_type', 'general')
+        
+        # Customer service and sales associates handle inquiries
+        if self.employee_data.role in [EmployeeRole.CUSTOMER_SERVICE, EmployeeRole.SALES_ASSOCIATE]:
+            if not self.is_busy:
+                self._start_customer_assistance_by_id(customer_id, inquiry_type)
+    
+    def _handle_assignment(self, message: Message):
+        """Handle task assignment messages from managers"""
+        task_type = message.content.get('task_type')
+        task_details = message.content.get('details', {})
+        priority = message.content.get('priority', 1)
+        
+        if not self.is_busy or priority >= 4:  # High priority tasks interrupt current work
+            self._start_assigned_task(task_type, task_details)
+    
+    def _handle_low_stock_alert(self, message: Message):
+        """Handle low stock alert messages"""
+        isbn = message.content.get('isbn')
+        current_stock = message.content.get('current_stock', 0)
+        threshold = message.content.get('threshold', 5)
+        
+        # Automatically trigger restock for very low stock
+        if current_stock <= 2 and self.employee_data.role in [EmployeeRole.INVENTORY_CLERK, EmployeeRole.MANAGER]:
+            reorder_quantity = message.content.get('reorder_quantity', 20)
+            
+            # Send restock request message
+            message_bus.publish(
+                f"employee_{self.unique_id}",
+                MessageType.RESTOCK_REQUEST,
+                {
+                    'isbn': isbn,
+                    'current_stock': current_stock,
+                    'reorder_quantity': reorder_quantity,
+                    'urgency': 'high'
+                },
+                priority=4
+            )
+    
+    def _start_restocking_task(self, isbn: str, quantity: int):
+        """Start a restocking task"""
+        self.is_busy = True
+        self.current_task = f"restocking_{isbn}"
+        self.task_duration = random.randint(3, 8)  # 3-8 steps to restock
+        
+        print(f"Employee {self.unique_id} starting restock task for book {isbn}")
+        
+        # Apply SWRL rule for restocking
+        if hasattr(bookstore_ontology, 'owl_ontology') and bookstore_ontology.owl_ontology:
+            rule_result = bookstore_ontology.owl_ontology.apply_swrl_rule(
+                'low_inventory_triggers_restock',
+                bookstore_ontology.inventory.get(isbn)
+            )
+    
+    def _start_customer_assistance_by_id(self, customer_id: str, inquiry_type: str):
+        """Start assisting a specific customer"""
+        self.is_busy = True
+        self.current_customer = customer_id
+        self.current_task = f"assisting_{customer_id}"
+        self.task_duration = random.randint(2, 6)  # 2-6 steps to help customer
+        
+        print(f"Employee {self.unique_id} assisting customer {customer_id} with {inquiry_type}")
+    
+    def _start_assigned_task(self, task_type: str, task_details: dict):
+        """Start an assigned task from management"""
+        self.is_busy = True
+        self.current_task = f"assigned_{task_type}"
+        self.task_duration = task_details.get('duration', 5)
+        
+        print(f"Employee {self.unique_id} starting assigned task: {task_type}")
     
     def _find_work(self):
         """Look for work to do based on role capabilities"""

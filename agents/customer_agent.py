@@ -3,7 +3,8 @@ Customer Agent
 
 This module implements the customer agent for the bookstore management system.
 Customer agents represent individual customers with behaviors like browsing,
-purchasing, and interacting with the bookstore environment.
+purchasing, and interacting with the bookstore environment. Includes message bus
+integration for agent communication.
 """
 
 import random
@@ -14,6 +15,7 @@ from datetime import datetime
 from ontology.bookstore_ontology import (
     Customer, CustomerType, BookCategory, bookstore_ontology
 )
+from communication.message_bus import message_bus, MessageType, Message
 
 
 class CustomerAgent(Agent):
@@ -39,6 +41,14 @@ class CustomerAgent(Agent):
         super().__init__(model)
         self.unique_id = unique_id
         self.customer_data = customer_data
+        
+        # Register with message bus
+        agent_id = f"customer_{unique_id}"
+        message_bus.register_agent(agent_id)
+        
+        # Subscribe to relevant message types
+        message_bus.subscribe(agent_id, MessageType.PRICE_UPDATE, self._handle_price_update)
+        message_bus.subscribe(agent_id, MessageType.LOW_STOCK_ALERT, self._handle_stock_alert)
         
         # Behavioral attributes
         self.preferred_categories = self._generate_preferences()
@@ -79,6 +89,10 @@ class CustomerAgent(Agent):
         if not self.is_shopping:
             return
         
+        # Process messages from other agents
+        agent_id = f"customer_{self.unique_id}"
+        message_bus.process_messages(agent_id)
+        
         self.current_patience -= 1
         
         if self.current_patience <= 0:
@@ -94,6 +108,32 @@ class CustomerAgent(Agent):
             self._complete_purchase()
         elif self.current_activity == "seeking_help":
             self._seek_employee_help()
+    
+    def _handle_price_update(self, message: Message):
+        """Handle price update messages"""
+        isbn = message.content.get('isbn')
+        new_price = message.content.get('new_price')
+        
+        # Check if this book is in our cart
+        for item in self.shopping_cart:
+            if item['isbn'] == isbn:
+                item['price'] = new_price
+                # Re-evaluate if we still want this book
+                if new_price > self.budget * self.price_sensitivity:
+                    self.shopping_cart.remove(item)
+                    print(f"Customer {self.unique_id} removed book {isbn} due to price increase")
+    
+    def _handle_stock_alert(self, message: Message):
+        """Handle low stock alerts"""
+        isbn = message.content.get('isbn')
+        
+        # If we're interested in this book, prioritize purchase
+        for item in self.shopping_cart:
+            if item['isbn'] == isbn:
+                if self.current_activity == "browsing":
+                    self.current_activity = "purchasing"
+                    print(f"Customer {self.unique_id} rushing to buy low-stock book {isbn}")
+                break
     
     def _browse_books(self):
         """Browse available books based on preferences"""

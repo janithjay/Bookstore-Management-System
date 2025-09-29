@@ -3,7 +3,8 @@ Bookstore Model
 
 This module implements the Mesa-based simulation model for the bookstore management system.
 It orchestrates the interactions between customers, employees, and books, while tracking
-various metrics and analytics.
+various metrics and analytics. Includes Owlready2 ontology integration and message bus
+communication system.
 """
 
 import random
@@ -15,12 +16,13 @@ from datetime import datetime, timedelta
 import uuid
 
 from ontology.bookstore_ontology import (
-    Book, Customer, Employee, Transaction, CustomerType, EmployeeRole, 
+    Book, Customer, Employee, Transaction, Order, Inventory, CustomerType, EmployeeRole, 
     BookCategory, bookstore_ontology
 )
 from agents.customer_agent import CustomerAgent
 from agents.employee_agent import EmployeeAgent
 from agents.book_agent import BookAgent
+from communication.message_bus import message_bus, MessageType
 
 
 class BookstoreModel(Model):
@@ -58,6 +60,9 @@ class BookstoreModel(Model):
         if seed is not None:
             random.seed(seed)
         
+        # Initialize message bus for the simulation
+        message_bus.clear_history()  # Clear any previous simulation data
+        
         # Model parameters
         self.num_customers = num_customers
         self.num_employees = num_employees
@@ -78,11 +83,15 @@ class BookstoreModel(Model):
         
         # Tracking lists
         self.transactions: List[Transaction] = []
+        self.orders: List[Order] = []
         self.customer_visits = []
         self.inventory_alerts = []
         
         # Initialize ontology with sample data
         self._initialize_sample_data()
+        
+        # Initialize Owlready2 ontology with our data
+        self._initialize_owl_ontology()
         
         # Create agents
         self._create_book_agents()
@@ -142,6 +151,19 @@ class BookstoreModel(Model):
                 description=f"An excellent {category.value.lower()} book by {author}"
             )
             bookstore_ontology.books[isbn] = book
+            
+            # Create corresponding inventory item
+            inventory_item = Inventory(
+                isbn=isbn,
+                current_stock=stock,
+                minimum_threshold=5,
+                maximum_capacity=100,
+                reorder_quantity=25,
+                last_restocked=datetime.now(),
+                supplier=f"{author} Publications",
+                location=f"Section {category.value[0]}-{isbn[-1]}"
+            )
+            bookstore_ontology.inventory[isbn] = inventory_item
         
         # Add more random books to reach desired number
         categories = list(BookCategory)
@@ -165,6 +187,19 @@ class BookstoreModel(Model):
                 description=f"A great {category.value.lower()} book"
             )
             bookstore_ontology.books[isbn] = book
+            
+            # Create corresponding inventory item
+            inventory_item = Inventory(
+                isbn=isbn,
+                current_stock=book.stock_quantity,
+                minimum_threshold=5,
+                maximum_capacity=100,
+                reorder_quantity=20,
+                last_restocked=datetime.now(),
+                supplier=f"Supplier for {author}",
+                location=f"Section {category.value[0]}-{i%10}"
+            )
+            bookstore_ontology.inventory[isbn] = inventory_item
     
     def _create_book_agents(self):
         """Create book agents for all books in the ontology"""
@@ -239,6 +274,12 @@ class BookstoreModel(Model):
         # Run all agent steps
         self.schedule.step()
         
+        # Process any pending messages in the message bus
+        self._process_system_messages()
+        
+        # Apply SWRL rules if ontology is available
+        self._apply_swrl_rules()
+        
         # Add new customers periodically
         if self.schedule.steps % 30 == 0:  # Every 30 minutes
             self._add_new_customers()
@@ -246,12 +287,77 @@ class BookstoreModel(Model):
         # Update business metrics
         self._update_business_metrics()
         
+        # Update Owlready2 ontology if available
+        self._update_owl_ontology()
+        
         # Collect data
         self.datacollector.collect(self)
         
         # Check if simulation should continue
         if self.schedule.steps >= self.max_steps:
             self.running = False
+    
+    def _process_system_messages(self):
+        """Process system-level messages and coordination"""
+        # Get message bus statistics
+        stats = message_bus.get_message_statistics()
+        
+        # Log interesting message activity
+        if stats['pending_messages'] > 10:
+            print(f"High message activity: {stats['pending_messages']} pending messages")
+    
+    def _apply_swrl_rules(self):
+        """Apply SWRL rules across the system"""
+        if hasattr(bookstore_ontology, 'owl_ontology') and bookstore_ontology.owl_ontology:
+            # Check for low inventory items and apply rules
+            for isbn, book in bookstore_ontology.books.items():
+                if book.stock_quantity <= 5:
+                    inventory_item = bookstore_ontology.inventory.get(isbn)
+                    if inventory_item:
+                        rule_result = bookstore_ontology.owl_ontology.apply_swrl_rule(
+                            'low_inventory_triggers_restock',
+                            inventory_item
+                        )
+                        if rule_result:
+                            # Send message to employees about restock need
+                            message_bus.publish(
+                                'system',
+                                MessageType.RESTOCK_REQUEST,
+                                {
+                                    'isbn': isbn,
+                                    'current_stock': book.stock_quantity,
+                                    'reorder_quantity': inventory_item.reorder_quantity,
+                                    'priority': 'high' if book.stock_quantity <= 2 else 'medium'
+                                },
+                                priority=4 if book.stock_quantity <= 2 else 3
+                            )
+    
+    def _initialize_owl_ontology(self):
+        """Initialize Owlready2 ontology with simulation data"""
+        if hasattr(bookstore_ontology, 'owl_ontology') and bookstore_ontology.owl_ontology:
+            # Add all books to ontology
+            for isbn, book in bookstore_ontology.books.items():
+                bookstore_ontology.owl_ontology.add_book(book)
+            
+            # Add all customers to ontology
+            for customer_id, customer in bookstore_ontology.customers.items():
+                bookstore_ontology.owl_ontology.add_customer(customer)
+            
+            # Add all employees to ontology
+            for employee_id, employee in bookstore_ontology.employees.items():
+                bookstore_ontology.owl_ontology.add_employee(employee)
+            
+            print("Initialized Owlready2 ontology with simulation data")
+    
+    def _update_owl_ontology(self):
+        """Update Owlready2 ontology with current simulation state"""
+        if hasattr(bookstore_ontology, 'owl_ontology') and bookstore_ontology.owl_ontology:
+            # Run reasoner every 60 steps (1 hour)
+            if self.schedule.steps % 60 == 0:
+                try:
+                    bookstore_ontology.owl_ontology.run_reasoner()
+                except Exception as e:
+                    print(f"Warning: Reasoner error - {e}")
     
     def _add_new_customers(self):
         """Add new customers to the simulation periodically"""
