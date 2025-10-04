@@ -62,6 +62,7 @@ class EmployeeAgent(Agent):
         self.task_duration = 0
         self.shift_hours = 8  # 8-hour shift
         self.hours_worked = 0
+        self.pending_restock = None  # Store restock info
         
         # Performance attributes
         self.daily_sales = 0.0
@@ -194,8 +195,7 @@ class EmployeeAgent(Agent):
         self.is_busy = True
         self.current_task = f"restocking_{isbn}"
         self.task_duration = random.randint(3, 8)  # 3-8 steps to restock
-        
-        print(f"Employee {self.unique_id} starting restock task for book {isbn}")
+        self.pending_restock = {'isbn': isbn, 'quantity': quantity}
         
         # Apply SWRL rule for restocking
         if hasattr(bookstore_ontology, 'owl_ontology') and bookstore_ontology.owl_ontology:
@@ -330,6 +330,8 @@ class EmployeeAgent(Agent):
             self._complete_inventory_work()
         elif self.current_task == "maintenance":
             self._complete_maintenance()
+        elif self.current_task.startswith("restocking_"):
+            self._complete_restocking()
         
         # Reset state
         self.is_busy = False
@@ -356,15 +358,16 @@ class EmployeeAgent(Agent):
     def _complete_transaction(self):
         """Complete transaction processing"""
         if self.current_customer:
+            # Let the customer complete their purchase now
+            # The customer agent will handle recording the transaction
+            if hasattr(self.current_customer, '_complete_purchase'):
+                # Signal to customer that transaction is ready
+                self.current_customer.transaction_ready = True
+            
+            # Note: We DON'T update daily_sales here anymore
+            # It will be updated by record_successful_transaction() only when transaction succeeds
+            
             self.transactions_processed += 1
-            
-            # Calculate transaction value
-            cart_value = sum(item['price'] * item['quantity'] 
-                           for item in self.current_customer.shopping_cart)
-            self.daily_sales += cart_value
-            
-            # Update employee sales count
-            self.employee_data.sales_count += 1
             
             # Performance impact based on transaction efficiency
             if self.task_duration <= 2:  # Fast service
@@ -372,36 +375,88 @@ class EmployeeAgent(Agent):
                     self.customer_satisfaction_score + 0.1)
             
             self.interaction_history.append({
-                'type': 'transaction_complete',
+                'type': 'transaction_processing_complete',
                 'customer_id': self.current_customer.customer_data.customer_id,
-                'transaction_value': cart_value,
                 'step': self.model.schedule.steps
             })
     
     def _complete_inventory_work(self):
         """Complete inventory management work"""
-        # Simulate inventory updates
-        books_restocked = random.randint(1, 5)
+        # Find books that need restocking
+        low_stock_books = [book for book in bookstore_ontology.books.values() 
+                          if book.stock_quantity <= 5]
         
-        # Randomly select books to restock
-        available_books = list(bookstore_ontology.books.values())
-        books_to_restock = random.sample(available_books, 
-                                       min(books_restocked, len(available_books)))
-        
-        for book in books_to_restock:
-            restock_amount = random.randint(1, 10)
-            book.stock_quantity += restock_amount
-        
-        self.interaction_history.append({
-            'type': 'inventory_work_complete',
-            'books_restocked': books_restocked,
-            'step': self.model.schedule.steps
-        })
+        if low_stock_books:
+            # Restock 1-3 books
+            books_to_restock = random.sample(low_stock_books, 
+                                           min(random.randint(1, 3), len(low_stock_books)))
+            
+            for book in books_to_restock:
+                restock_amount = random.randint(10, 25)
+                
+                # Find the book agent and call restock
+                for agent in self.model.schedule.agents:
+                    from agents.book_agent import BookAgent
+                    if isinstance(agent, BookAgent) and agent.book_data.isbn == book.isbn:
+                        agent.restock(restock_amount)
+                        break
+            
+            self.interaction_history.append({
+                'type': 'inventory_work_complete',
+                'books_restocked': len(books_to_restock),
+                'step': self.model.schedule.steps
+            })
+        else:
+            # No low stock books, just record the work
+            self.interaction_history.append({
+                'type': 'inventory_work_complete',
+                'books_restocked': 0,
+                'step': self.model.schedule.steps
+            })
     
     def _complete_maintenance(self):
         """Complete maintenance task"""
         self.interaction_history.append({
             'type': 'maintenance_complete',
+            'step': self.model.schedule.steps
+        })
+    
+    def _complete_restocking(self):
+        """Complete restocking task"""
+        if self.pending_restock:
+            isbn = self.pending_restock['isbn']
+            quantity = self.pending_restock['quantity']
+            
+            # Find the book agent and restock it
+            from agents.book_agent import BookAgent
+            for agent in self.model.schedule.agents:
+                if isinstance(agent, BookAgent) and agent.book_data.isbn == isbn:
+                    agent.restock(quantity)
+                    print(f"Employee {self.unique_id} restocked {quantity} copies of book {isbn}")
+                    break
+            
+            self.interaction_history.append({
+                'type': 'restocking_complete',
+                'isbn': isbn,
+                'quantity': quantity,
+                'step': self.model.schedule.steps
+            })
+            
+            self.pending_restock = None
+    
+    def record_successful_transaction(self, transaction_amount: float):
+        """
+        Record a successful transaction - called by model after transaction completes
+        
+        Args:
+            transaction_amount: Actual revenue from transaction (after discount)
+        """
+        self.daily_sales += transaction_amount
+        self.employee_data.sales_count += 1
+        
+        self.interaction_history.append({
+            'type': 'transaction_successful',
+            'transaction_amount': transaction_amount,
             'step': self.model.schedule.steps
         })
     

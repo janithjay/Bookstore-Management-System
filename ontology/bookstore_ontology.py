@@ -274,6 +274,57 @@ class BookstoreOntology:
                 return False
         
         return True
+    
+    def update_book_stock(self, isbn: str, quantity_change: int) -> bool:
+        """
+        Update book stock and synchronize with inventory
+        
+        Args:
+            isbn: Book ISBN
+            quantity_change: Change in quantity (positive = add, negative = reduce)
+            
+        Returns:
+            True if successful, False if would result in negative stock
+        """
+        if isbn not in self.books:
+            return False
+        
+        book = self.books[isbn]
+        new_stock = book.stock_quantity + quantity_change
+        
+        if new_stock < 0:
+            return False
+        
+        book.stock_quantity = new_stock
+        
+        # Synchronize with inventory object
+        if isbn in self.inventory:
+            self.inventory[isbn].current_stock = new_stock
+            self.inventory[isbn].last_restocked = datetime.now()
+        
+        return True
+    
+    def get_inventory_status(self) -> Dict[str, Any]:
+        """Get comprehensive inventory status"""
+        total_books = len(self.books)
+        total_stock = sum(book.stock_quantity for book in self.books.values())
+        out_of_stock = sum(1 for book in self.books.values() if book.stock_quantity == 0)
+        
+        # Count low stock books
+        low_stock = 0
+        for isbn, book in self.books.items():
+            if isbn in self.inventory:
+                threshold = self.inventory[isbn].minimum_threshold
+                if 0 < book.stock_quantity <= threshold:
+                    low_stock += 1
+        
+        return {
+            'total_books': total_books,
+            'total_stock': total_stock,
+            'out_of_stock_count': out_of_stock,
+            'low_stock_count': low_stock,
+            'average_stock_per_book': total_stock / max(1, total_books)
+        }
 
 
 class OwlBookstoreOntology:

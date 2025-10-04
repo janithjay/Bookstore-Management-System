@@ -167,11 +167,14 @@ def run_simulation(model: BookstoreModel, args, output_path: Path):
             # Print progress
             if args.verbose and step_count % step_interval == 0:
                 summary = model.get_simulation_summary()
+                inventory_status = bookstore_ontology.get_inventory_status()
                 print(f"Step {step_count:4d} | "
                       f"Time: {summary['simulation_time']} | "
                       f"Revenue: ${summary['daily_revenue']:6.2f} | "
                       f"Transactions: {summary['total_transactions']:3d} | "
-                      f"Active Customers: {summary['active_customers']:2d}")
+                      f"Active Customers: {summary['active_customers']:2d} | "
+                      f"Total Stock: {inventory_status['total_stock']:4d} | "
+                      f"Low Stock: {inventory_status['low_stock_count']:2d}")
             
             # Periodic data export (every 30 minutes of sim time)
             if step_count % 30 == 0:
@@ -190,10 +193,15 @@ def run_simulation(model: BookstoreModel, args, output_path: Path):
 
 def export_checkpoint_data(model: BookstoreModel, output_path: Path, step: int):
     """Export checkpoint data during simulation"""
-    checkpoint_file = output_path / 'data' / f'checkpoint_{step:04d}.json'
+    checkpoint_file = output_path / 'data' / f'checkpoint_{step:06d}.json'
     
     try:
         summary = model.get_simulation_summary()
+        inventory_status = bookstore_ontology.get_inventory_status()
+        
+        # Add inventory status to summary
+        summary['inventory_status'] = inventory_status
+        
         with open(checkpoint_file, 'w') as f:
             json.dump(summary, f, indent=2)
     except Exception as e:
@@ -211,6 +219,7 @@ def generate_final_report(model: BookstoreModel, output_path: Path, args):
     top_books = model.get_top_performing_books(20)
     employee_performance = model.get_employee_performance()
     customer_insights = model.get_customer_insights()
+    inventory_status = bookstore_ontology.get_inventory_status()
     
     # Create final report data
     report_data = {
@@ -222,6 +231,7 @@ def generate_final_report(model: BookstoreModel, output_path: Path, args):
             'seed': args.seed
         },
         'simulation_summary': summary,
+        'inventory_status': inventory_status,
         'agent_states': agent_states,
         'top_books': top_books,
         'employee_performance': employee_performance,
@@ -264,6 +274,7 @@ def print_simulation_summary(model: BookstoreModel):
     top_books = model.get_top_performing_books(5)
     employee_performance = model.get_employee_performance()
     customer_insights = model.get_customer_insights()
+    inventory_status = bookstore_ontology.get_inventory_status()
     
     print("\n" + "=" * 60)
     print("SIMULATION SUMMARY")
@@ -290,7 +301,11 @@ def print_simulation_summary(model: BookstoreModel):
     print(f"  Average Customer Value: ${customer_insights['average_customer_value']:,.2f}")
     
     print("\n📦 Inventory Status:")
-    print(f"  Books Needing Restock: {summary['low_stock_books']}")
+    print(f"  Total Books: {inventory_status['total_books']}")
+    print(f"  Total Stock: {inventory_status['total_stock']} units")
+    print(f"  Out of Stock: {inventory_status['out_of_stock_count']} books")
+    print(f"  Low Stock: {inventory_status['low_stock_count']} books")
+    print(f"  Avg Stock/Book: {inventory_status['average_stock_per_book']:.1f} units")
     print(f"  Inventory Alerts: {summary['inventory_alerts']}")
     
     print("=" * 60)

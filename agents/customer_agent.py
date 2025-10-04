@@ -61,6 +61,8 @@ class CustomerAgent(Agent):
         self.is_shopping = True
         self.current_activity = "browsing"
         self.interaction_history = []
+        self.waiting_for_employee = False
+        self.assigned_employee = None
         
         # Decision making parameters
         self.price_sensitivity = random.uniform(0.1, 0.9)  # 0 = price insensitive, 1 = very sensitive
@@ -210,6 +212,23 @@ class CustomerAgent(Agent):
             self.current_activity = "browsing"
             return
         
+        # Validate all items are still in stock before purchase
+        valid_items = []
+        for item in self.shopping_cart:
+            book = bookstore_ontology.books.get(item['isbn'])
+            if book and book.stock_quantity >= item['quantity']:
+                valid_items.append(item)
+            else:
+                print(f"Customer {self.unique_id}: Book {item['isbn']} no longer has enough stock")
+        
+        # Update cart with valid items only
+        self.shopping_cart = valid_items
+        
+        if not self.shopping_cart:
+            print(f"Customer {self.unique_id}: All items out of stock, returning to browsing")
+            self.current_activity = "browsing"
+            return
+        
         # Find available employee to process transaction
         available_employee = self._find_available_employee()
         
@@ -235,7 +254,8 @@ class CustomerAgent(Agent):
         # Record transaction in model
         transaction_id = f"TXN_{self.model.schedule.steps}_{self.unique_id}"
         
-        self.model.record_transaction(
+        # Process the transaction - this will update stock
+        success = self.model.record_transaction(
             transaction_id=transaction_id,
             customer_id=self.customer_data.customer_id,
             employee_id=available_employee.employee_data.employee_id,
@@ -243,6 +263,11 @@ class CustomerAgent(Agent):
             total_amount=total_amount,
             discount_applied=discount_amount
         )
+        
+        if not success:
+            print(f"Transaction {transaction_id} failed - insufficient stock")
+            self.current_activity = "browsing"
+            return
         
         # Update customer data
         self.customer_data.total_purchases += (total_amount - discount_amount)
@@ -295,8 +320,11 @@ class CustomerAgent(Agent):
     
     def _get_available_books(self) -> List:
         """Get list of available books from the model"""
-        return [book for book in bookstore_ontology.books.values() 
-                if book.stock_quantity > 0]
+        available_books = []
+        for book in bookstore_ontology.books.values():
+            if book.stock_quantity > 0:
+                available_books.append(book)
+        return available_books
     
     def _should_consider_book(self, book) -> bool:
         """Decide whether to consider a book for purchase"""
@@ -314,9 +342,14 @@ class CustomerAgent(Agent):
     
     def _add_to_cart(self, book):
         """Add book to shopping cart"""
+        # Verify book is still in stock
+        if book.stock_quantity <= 0:
+            return
+        
         # Check if already in cart
         for item in self.shopping_cart:
             if item['isbn'] == book.isbn:
+                # Only increase quantity if there's enough stock
                 if item['quantity'] < book.stock_quantity:
                     item['quantity'] += 1
                 return

@@ -393,8 +393,24 @@ class BookstoreModel(Model):
         books: List[Dict[str, Any]], 
         total_amount: float, 
         discount_applied: float
-    ):
-        """Record a completed transaction"""
+    ) -> bool:
+        """
+        Record a completed transaction
+        
+        Returns:
+            True if transaction successful, False if any book out of stock
+        """
+        # Validate all books have sufficient stock before processing
+        for book_item in books:
+            isbn = book_item['isbn']
+            quantity = book_item['quantity']
+            
+            book = bookstore_ontology.books.get(isbn)
+            if not book or book.stock_quantity < quantity:
+                print(f"Transaction {transaction_id} failed: Book {isbn} insufficient stock")
+                return False
+        
+        # All validations passed, process the transaction
         transaction = Transaction(
             transaction_id=transaction_id,
             customer_id=customer_id,
@@ -407,9 +423,12 @@ class BookstoreModel(Model):
         
         self.transactions.append(transaction)
         self.total_transactions += 1
-        self.daily_revenue += (total_amount - discount_applied)
         
-        # Update book sales
+        # Calculate actual revenue (after discount)
+        actual_revenue = total_amount - discount_applied
+        self.daily_revenue += actual_revenue
+        
+        # Update book sales and stock
         for book_item in books:
             isbn = book_item['isbn']
             quantity = book_item['quantity']
@@ -417,8 +436,16 @@ class BookstoreModel(Model):
             # Find book agent and process sale
             for agent in self.schedule.agents:
                 if isinstance(agent, BookAgent) and agent.book_data.isbn == isbn:
-                    agent.process_sale(quantity)
+                    agent.process_sale(quantity, customer_id=customer_id)
                     break
+        
+        # Notify employee of successful transaction (for their sales tracking)
+        for agent in self.schedule.agents:
+            if isinstance(agent, EmployeeAgent) and agent.employee_data.employee_id == employee_id:
+                agent.record_successful_transaction(actual_revenue)
+                break
+        
+        return True
     
     def record_customer_visit(
         self, 

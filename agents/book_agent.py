@@ -210,12 +210,13 @@ class BookAgent(Agent):
                 priority=5
             )
     
-    def process_sale(self, quantity: int = 1) -> bool:
+    def process_sale(self, quantity: int = 1, customer_id: str = None) -> bool:
         """
         Process a book sale and apply SWRL rules
         
         Args:
             quantity: Number of books sold
+            customer_id: ID of the customer making the purchase
             
         Returns:
             True if sale successful, False otherwise
@@ -225,13 +226,20 @@ class BookAgent(Agent):
             if hasattr(bookstore_ontology, 'owl_ontology') and bookstore_ontology.owl_ontology:
                 rule_result = bookstore_ontology.owl_ontology.apply_swrl_rule(
                     'purchase_reduces_stock',
-                    customer_id='current_customer',  # This would be passed from customer agent
+                    customer_id=customer_id or 'unknown',
                     book_isbn=self.book_data.isbn,
                     quantity=quantity
                 )
             
-            # Update stock
+            # Update stock in book data
             self.book_data.stock_quantity -= quantity
+            
+            # Update inventory object in ontology
+            if self.book_data.isbn in bookstore_ontology.inventory:
+                bookstore_ontology.inventory[self.book_data.isbn].current_stock = self.book_data.stock_quantity
+                bookstore_ontology.inventory[self.book_data.isbn].last_restocked = datetime.now()
+            
+            # Update sales tracking
             self.daily_sales += quantity
             self.weekly_sales += quantity
             self.total_sales += quantity
@@ -245,7 +253,8 @@ class BookAgent(Agent):
                     'action': 'sale',
                     'quantity_sold': quantity,
                     'new_stock': self.book_data.stock_quantity,
-                    'title': self.book_data.title
+                    'title': self.book_data.title,
+                    'customer_id': customer_id
                 }
             )
             
@@ -260,6 +269,13 @@ class BookAgent(Agent):
             quantity: Number of books to add to stock
         """
         self.book_data.stock_quantity += quantity
+        self.book_data.stock_quantity = min(self.book_data.stock_quantity, 
+                                          self.max_stock_level)
+        
+        # Update inventory object in ontology
+        if self.book_data.isbn in bookstore_ontology.inventory:
+            bookstore_ontology.inventory[self.book_data.isbn].current_stock = self.book_data.stock_quantity
+            bookstore_ontology.inventory[self.book_data.isbn].last_restocked = datetime.now()
         
         # Send inventory update message
         message_bus.publish(
@@ -426,29 +442,6 @@ class BookAgent(Agent):
             self.demand_history.pop(0)
             self.price_history.pop(0)
             self.stock_history.pop(0)
-    
-    def process_sale(self, quantity: int):
-        """Process a book sale"""
-        if quantity <= self.book_data.stock_quantity:
-            self.book_data.stock_quantity -= quantity
-            self.daily_sales += quantity
-            self.weekly_sales += quantity
-            self.total_sales += quantity
-            
-            # Update customer reviews (slight improvement with each sale)
-            if random.random() < 0.1:  # 10% chance
-                review_change = random.uniform(-0.1, 0.2)  # Slightly biased positive
-                self.customer_reviews_score = max(1.0, min(5.0, 
-                    self.customer_reviews_score + review_change))
-            
-            return True
-        return False
-    
-    def restock(self, quantity: int):
-        """Restock the book"""
-        self.book_data.stock_quantity += quantity
-        self.book_data.stock_quantity = min(self.book_data.stock_quantity, 
-                                          self.max_stock_level)
     
     def get_demand_forecast(self, days_ahead: int = 7) -> List[float]:
         """Get demand forecast for the next few days"""
