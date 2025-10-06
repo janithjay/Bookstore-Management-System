@@ -130,6 +130,9 @@ def create_sidebar():
 def start_simulation(num_customers, num_employees, num_books, simulation_hours, seed):
     """Initialize and start the simulation"""
     try:
+        # Reset ontology before starting new simulation
+        bookstore_ontology.reset()
+        
         st.session_state.model = BookstoreModel(
             num_customers=num_customers,
             num_employees=num_employees,
@@ -162,6 +165,9 @@ def stop_simulation():
 
 def reset_simulation():
     """Reset the simulation to initial state"""
+    # Reset ontology
+    bookstore_ontology.reset()
+    
     st.session_state.model = None
     st.session_state.running = False
     st.session_state.simulation_data = {
@@ -404,13 +410,17 @@ def display_detailed_analytics():
         st.markdown("### 🛒 Customer Insights")
         customer_insights = st.session_state.model.get_customer_insights()
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Customers", customer_insights['total_customers'])
+            st.metric("Registered Customers", customer_insights['total_customers'])
         with col2:
-            st.metric("Avg Customer Value", f"${customer_insights['average_customer_value']:,.2f}")
+            st.metric("Active Shoppers", customer_insights.get('participating_customers', 0))
         with col3:
+            st.metric("Avg Customer Value", f"${customer_insights['average_customer_value']:,.2f}")
+        with col4:
             st.metric("Total Spend", f"${customer_insights['total_customer_spend']:,.2f}")
+        
+        st.info("💡 Spend values reflect simulation period only, not pre-existing historical data")
         
         # Customer type breakdown
         if customer_insights['customer_type_breakdown']:
@@ -420,45 +430,58 @@ def display_detailed_analytics():
     with tab4:
         st.markdown("### 📊 Simulation Analytics")
         
-        if st.session_state.simulation_data['steps']:
-            # Multi-metric line chart
-            fig_multi = go.Figure()
+        if st.session_state.simulation_data['steps'] and len(st.session_state.simulation_data['steps']) > 0:
+            # Check if we have meaningful data to display
+            has_revenue = any(st.session_state.simulation_data['revenue'])
+            has_transactions = any(st.session_state.simulation_data['transactions'])
             
-            # Normalize values for comparison
-            max_revenue = max(st.session_state.simulation_data['revenue']) if st.session_state.simulation_data['revenue'] else 1
-            max_trans = max(st.session_state.simulation_data['transactions']) if st.session_state.simulation_data['transactions'] else 1
-            
-            fig_multi.add_trace(go.Scatter(
-                x=st.session_state.simulation_data['steps'],
-                y=[r/max_revenue*100 for r in st.session_state.simulation_data['revenue']],
-                name='Revenue (normalized)',
-                yaxis='y'
-            ))
-            
-            fig_multi.add_trace(go.Scatter(
-                x=st.session_state.simulation_data['steps'],
-                y=[t/max_trans*100 for t in st.session_state.simulation_data['transactions']],
-                name='Transactions (normalized)',
-                yaxis='y'
-            ))
-            
-            fig_multi.add_trace(go.Scatter(
-                x=st.session_state.simulation_data['steps'],
-                y=st.session_state.simulation_data['customers'],
-                name='Active Customers',
-                yaxis='y2'
-            ))
-            
-            fig_multi.update_layout(
-                title='Multi-Metric Analysis',
-                xaxis=dict(title='Simulation Steps'),
-                yaxis=dict(title='Normalized % (Revenue & Transactions)', side='left'),
-                yaxis2=dict(title='Active Customers', overlaying='y', side='right'),
-                hovermode='x unified',
-                height=500
-            )
-            
-            st.plotly_chart(fig_multi, use_container_width=True)
+            if not has_revenue and not has_transactions:
+                st.info("📊 No transactions yet. Analytics will appear once sales begin.")
+            else:
+                # Multi-metric line chart
+                fig_multi = go.Figure()
+                
+                # Normalize values for comparison (avoid division by zero)
+                max_revenue = max(st.session_state.simulation_data['revenue']) if st.session_state.simulation_data['revenue'] else 1
+                max_trans = max(st.session_state.simulation_data['transactions']) if st.session_state.simulation_data['transactions'] else 1
+                
+                # Ensure we don't divide by zero
+                max_revenue = max(max_revenue, 0.01)  # Minimum value to avoid division by zero
+                max_trans = max(max_trans, 0.01)
+                
+                fig_multi.add_trace(go.Scatter(
+                    x=st.session_state.simulation_data['steps'],
+                    y=[r/max_revenue*100 for r in st.session_state.simulation_data['revenue']],
+                    name='Revenue (normalized)',
+                    yaxis='y'
+                ))
+                
+                fig_multi.add_trace(go.Scatter(
+                    x=st.session_state.simulation_data['steps'],
+                    y=[t/max_trans*100 for t in st.session_state.simulation_data['transactions']],
+                    name='Transactions (normalized)',
+                    yaxis='y'
+                ))
+                
+                fig_multi.add_trace(go.Scatter(
+                    x=st.session_state.simulation_data['steps'],
+                    y=st.session_state.simulation_data['customers'],
+                    name='Active Customers',
+                    yaxis='y2'
+                ))
+                
+                fig_multi.update_layout(
+                    title='Multi-Metric Analysis',
+                    xaxis=dict(title='Simulation Steps'),
+                    yaxis=dict(title='Normalized % (Revenue & Transactions)', side='left'),
+                    yaxis2=dict(title='Active Customers', overlaying='y', side='right'),
+                    hovermode='x unified',
+                    height=500
+                )
+                
+                st.plotly_chart(fig_multi, use_container_width=True)
+        else:
+            st.info("📊 Start the simulation to see analytics.")
 
 
 def main():

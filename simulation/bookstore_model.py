@@ -583,36 +583,60 @@ class BookstoreModel(Model):
         return performance
     
     def get_customer_insights(self) -> Dict[str, Any]:
-        """Get customer behavior insights"""
-        customer_type_stats = {}
-        total_spent = 0
-        total_customers = 0
+        """Get customer behavior insights
         
-        for customer in bookstore_ontology.customers.values():
+        Note: Returns ONLY simulation period purchases, not historical pre-simulation data.
+        This ensures consistency with daily_revenue metric.
+        """
+        customer_type_stats = {}
+        
+        # Get actual customer agents that participated in simulation
+        customer_agents = [a for a in self.schedule.agents if isinstance(a, CustomerAgent)]
+        
+        simulation_spent = 0
+        participating_customers = 0
+        
+        for agent in customer_agents:
+            customer = agent.customer_data
             customer_type = customer.customer_type.value
+            
+            # Calculate simulation-period purchases by looking at interaction history
+            agent_purchases = sum(
+                interaction['amount'] 
+                for interaction in agent.interaction_history 
+                if interaction['type'] == 'purchase'
+            )
+            
             if customer_type not in customer_type_stats:
                 customer_type_stats[customer_type] = {
                     'count': 0,
                     'total_spent': 0,
                     'average_spent': 0,
-                    'total_loyalty_points': 0
+                    'total_loyalty_points': 0,
+                    'customers': 0
                 }
             
             customer_type_stats[customer_type]['count'] += 1
-            customer_type_stats[customer_type]['total_spent'] += customer.total_purchases
+            customer_type_stats[customer_type]['customers'] += 1
+            customer_type_stats[customer_type]['total_spent'] += agent_purchases
             customer_type_stats[customer_type]['total_loyalty_points'] += customer.loyalty_points
             
-            total_spent += customer.total_purchases
-            total_customers += 1
+            simulation_spent += agent_purchases
+            participating_customers += 1
         
         # Calculate averages
         for stats in customer_type_stats.values():
             if stats['count'] > 0:
                 stats['average_spent'] = stats['total_spent'] / stats['count']
         
+        # Total customers includes all registered, but spend is only from active shoppers
+        total_registered_customers = len(bookstore_ontology.customers)
+        
         return {
             'customer_type_breakdown': customer_type_stats,
-            'total_customers': total_customers,
-            'average_customer_value': total_spent / max(1, total_customers),
-            'total_customer_spend': total_spent
+            'total_customers': total_registered_customers,
+            'participating_customers': participating_customers,
+            'average_customer_value': simulation_spent / max(1, participating_customers),
+            'total_customer_spend': simulation_spent,
+            'note': 'Spend values reflect simulation period only, not historical data'
         }

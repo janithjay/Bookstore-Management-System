@@ -209,6 +209,39 @@ class BookstoreOntology:
         if OWLREADY_AVAILABLE:
             self._init_owl_ontology()
     
+    def reset(self):
+        """Reset ontology to initial state - clears all data"""
+        # Clear Python data structures
+        self.books.clear()
+        self.customers.clear()
+        self.employees.clear()
+        self.transactions.clear()
+        self.orders.clear()
+        self.inventory.clear()
+        
+        # Reset OWL ontology if available
+        if OWLREADY_AVAILABLE and self.owl_ontology:
+            try:
+                # Clear all instances from the ontology
+                with self.owl_ontology:
+                    # Get all instances
+                    all_instances = list(self.owl_ontology.individuals())
+                    for instance in all_instances:
+                        try:
+                            destroy_entity(instance)
+                        except:
+                            pass  # Ignore errors for individual instances
+                            
+                print("✅ Ontology reset successfully")
+            except Exception as e:
+                print(f"⚠️ Warning: Could not fully reset OWL ontology: {e}")
+                # Fallback: recreate the ontology
+                try:
+                    self.owl_ontology = None
+                    self._init_owl_ontology()
+                except:
+                    pass
+    
     def get_customer_discount(self, customer_type: CustomerType) -> float:
         """Get discount percentage for customer type"""
         return self.customer_discount_rules.get(customer_type, 0.0)
@@ -377,7 +410,7 @@ class OwlBookstoreOntology:
                 domain = [CustomerEntity]
                 range = [BookItem]
             
-            class worksAt(ObjectProperty):
+            class worksAt(ObjectProperty, FunctionalProperty):
                 domain = [EmployeeEntity]
                 range = [str]  # Bookstore name
             
@@ -510,22 +543,48 @@ class OwlBookstoreOntology:
         if not OWLREADY_AVAILABLE:
             return
             
-        with self.onto:
-            book_instance = self.BookItem(f"book_{book_data.isbn.replace('-', '_')}")
-            book_instance.hasAuthor = book_data.author
-            book_instance.hasGenre = book_data.category.value
-            book_instance.hasPrice = book_data.price
-            book_instance.hasStock = book_data.stock_quantity
+        try:
+            with self.onto:
+                book_id = f"book_{book_data.isbn.replace('-', '_')}"
+                # Check if instance already exists
+                existing = self.onto.search_one(iri=f"*{book_id}")
+                if existing:
+                    # Update existing instance
+                    existing.hasAuthor = book_data.author
+                    existing.hasGenre = book_data.category.value
+                    existing.hasPrice = book_data.price
+                    existing.hasStock = book_data.stock_quantity
+                else:
+                    # Create new instance
+                    book_instance = self.BookItem(book_id)
+                    book_instance.hasAuthor = book_data.author
+                    book_instance.hasGenre = book_data.category.value
+                    book_instance.hasPrice = book_data.price
+                    book_instance.hasStock = book_data.stock_quantity
+        except Exception as e:
+            print(f"Warning: Could not add book to OWL ontology: {e}")
     
     def add_employee(self, employee_data: Employee):
         """Add employee to ontology"""
         if not OWLREADY_AVAILABLE:
             return
             
-        with self.onto:
-            employee_instance = self.EmployeeEntity(f"employee_{employee_data.employee_id}")
-            employee_instance.employeeRole = employee_data.role.value
-            employee_instance.worksAt = "MainBookstore"
+        try:
+            with self.onto:
+                emp_id = f"employee_{employee_data.employee_id}"
+                # Check if instance already exists
+                existing = self.onto.search_one(iri=f"*{emp_id}")
+                if existing:
+                    # Update existing instance
+                    existing.employeeRole = employee_data.role.value
+                    existing.worksAt = "MainBookstore"
+                else:
+                    # Create new instance
+                    employee_instance = self.EmployeeEntity(emp_id)
+                    employee_instance.employeeRole = employee_data.role.value
+                    employee_instance.worksAt = "MainBookstore"
+        except Exception as e:
+            print(f"Warning: Could not add employee to OWL ontology: {e}")
     
     def run_reasoner(self):
         """Run the reasoning engine to apply SWRL rules"""
