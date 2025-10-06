@@ -2,3 +2,5 @@
 *.pyc
 /report
 *.md
+*.tex
+*.mmd

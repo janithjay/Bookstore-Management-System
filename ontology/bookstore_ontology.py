@@ -8,6 +8,7 @@ and bookstore operations using Owlready2 for formal ontology representation.
 
 import os
 from typing import Dict, List, Any
+from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime
@@ -351,13 +352,23 @@ class BookstoreOntology:
                 if 0 < book.stock_quantity <= threshold:
                     low_stock += 1
         
-        return {
+        status = {
             'total_books': total_books,
             'total_stock': total_stock,
             'out_of_stock_count': out_of_stock,
             'low_stock_count': low_stock,
             'average_stock_per_book': total_stock / max(1, total_books)
         }
+        # If OWL ontology is present, supplement with reasoned classification
+        try:
+            if OWLREADY_AVAILABLE and self.owl_ontology and hasattr(self.owl_ontology, 'get_reasoned_low_stock_books'):
+                reasoned = self.owl_ontology.get_reasoned_low_stock_books()
+                status['reasoned_low_stock_count'] = len(reasoned)
+                if reasoned:
+                    status['reasoned_low_stock_isbns'] = reasoned[:25]
+        except Exception:
+            pass
+        return status
 
 
 class OwlBookstoreOntology:
@@ -366,10 +377,14 @@ class OwlBookstoreOntology:
     def __init__(self):
         """Initialize the Owlready2 ontology"""
         if not OWLREADY_AVAILABLE:
+            self.reasoning_enabled = False
+            self.reasoner_available = False
             return
             
         # Create ontology
         self.onto = get_ontology("http://example.org/bookstore.owl")
+        self.reasoning_enabled = True
+        self.reasoner_available = True
         
         with self.onto:
             # Define classes
@@ -461,6 +476,21 @@ class OwlBookstoreOntology:
         
         # Initialize SWRL rules
         self._init_swrl_rules()
+        
+        # Attempt import of external SWRL axioms OWL file
+        try:
+            external_path = Path(__file__).parent / 'external_rules.owl'
+            if external_path.exists():
+                self.external_rules_onto = get_ontology(external_path.as_uri()).load()
+                # Link import if not already declared
+                if self.external_rules_onto not in self.onto.imported_ontologies:
+                    self.onto.imported_ontologies.append(self.external_rules_onto)
+                self.external_rules_loaded = True
+            else:
+                self.external_rules_loaded = False
+        except Exception as e:
+            print(f"Warning: Could not load external SWRL ontology: {e}")
+            self.external_rules_loaded = False
     
     def _init_swrl_rules(self):
         """Initialize SWRL (Semantic Web Rule Language) rules"""
@@ -478,6 +508,18 @@ class OwlBookstoreOntology:
             'premium_customer_discount': self._rule_premium_customer_discount,
             'employee_can_process_order': self._rule_employee_can_process_order
         }
+        
+        # Attempt to add a simple SWRL-like axiom (informational only)
+        try:
+            with self.onto:
+                # This is illustrative; Owlready2 stores Imp objects for SWRL rules.
+                from owlready2 import Imp
+                rule = Imp()
+                rule.set_as_rule("InventoryItem(?i), availableQuantity(?i, ?q), swrlb:lessThan(?q, 5) -> needsRestock(?i, true)")
+                self.has_pseudo_swrl = True
+        except Exception:
+            # Non-fatal; environment may lack full support
+            self.has_pseudo_swrl = False
     
     def _rule_purchase_reduces_stock(self, customer_id: str, book_isbn: str, quantity: int = 1):
         """SWRL Rule: If a customer purchases a book, reduce stock"""
@@ -594,8 +636,14 @@ class OwlBookstoreOntology:
         try:
             with self.onto:
                 sync_reasoner_pellet([self.onto])
+            self.reasoner_available = True
+            try:
+                self.LowStockBook = self.onto.search_one(iri="*LowStockBook")
+            except Exception:
+                self.LowStockBook = None
         except Exception as e:
             print(f"Warning: Could not run reasoner - {e}")
+            self.reasoner_available = False
     
     def save_ontology(self, filepath: str = "bookstore_ontology.owl"):
         """Save ontology to OWL file"""
@@ -606,6 +654,24 @@ class OwlBookstoreOntology:
             self.onto.save(file=filepath, format="rdfxml")
         except Exception as e:
             print(f"Warning: Could not save ontology - {e}")
+
+    def get_reasoned_low_stock_books(self) -> List[str]:
+        """Return list of ISBNs for individuals inferred as LowStockBook.
+        Individual naming convention: book_<isbn with dashes replaced by underscores>.
+        """
+        if not OWLREADY_AVAILABLE or not hasattr(self, 'LowStockBook') or self.LowStockBook is None:
+            return []
+        results = []
+        try:
+            for inst in self.LowStockBook.instances():
+                name = inst.name
+                if name.startswith('book_'):
+                    raw = name[len('book_'):]
+                    isbn = raw.replace('_', '-')
+                    results.append(isbn)
+        except Exception:
+            return []
+        return results
 
 
 # Add Owlready2 initialization to main ontology class

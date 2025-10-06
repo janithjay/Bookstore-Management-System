@@ -221,8 +221,42 @@ def generate_final_report(model: BookstoreModel, output_path: Path, args):
     customer_insights = model.get_customer_insights()
     inventory_status = bookstore_ontology.get_inventory_status()
     
+    # Attempt ontology export for documentation/evidence
+    ontology_file = None
+    try:
+        ontology_dir = output_path / 'ontology'
+        ontology_dir.mkdir(exist_ok=True, parents=True)
+        ontology_file = ontology_dir / f'bookstore_ontology_{datetime.now().strftime("%Y%m%d_%H%M%S")}.owl'
+        # Save only if owlready2 available (guarded in implementation)
+        bookstore_ontology.save_ontology(str(ontology_file))
+    except Exception as e:
+        print(f"Warning: Could not export ontology OWL file: {e}")
+    
     # Create final report data
+    # Aggregate category sales (basic revenue and units per inferred genre if available)
+    category_sales = {}
+    try:
+        for tx in model.transactions:
+            for book_entry in tx.books:
+                # book_entry structure assumed: {'isbn':..., 'title':..., 'quantity':..., 'unit_price':...}
+                qty = book_entry.get('quantity', 1)
+                price = book_entry.get('unit_price', 0.0)
+                # Attempt to infer genre via ontology lookup if present
+                genre = 'UNKNOWN'
+                try:
+                    book_isbn = book_entry.get('isbn')
+                    if book_isbn and book_isbn in bookstore_ontology.books:
+                        genre = bookstore_ontology.books[book_isbn].category
+                except Exception:
+                    pass
+                cat = category_sales.setdefault(genre, {'units': 0, 'revenue': 0.0})
+                cat['units'] += qty
+                cat['revenue'] += qty * price
+    except Exception as e:
+        print(f"Warning: Could not build category sales: {e}")
+
     report_data = {
+        'report_version': '1.1',
         'simulation_config': {
             'customers': args.customers,
             'employees': args.employees,
@@ -236,6 +270,7 @@ def generate_final_report(model: BookstoreModel, output_path: Path, args):
         'top_books': top_books,
         'employee_performance': employee_performance,
         'customer_insights': customer_insights,
+        'category_sales': category_sales,
         'transactions': [
             {
                 'id': t.transaction_id,
@@ -249,6 +284,8 @@ def generate_final_report(model: BookstoreModel, output_path: Path, args):
         'inventory_alerts': model.inventory_alerts,
         'customer_visits': model.customer_visits
     }
+    if ontology_file:
+        report_data['ontology_export'] = str(ontology_file)
     
     # Save comprehensive report
     report_file = output_path / f'simulation_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
@@ -286,6 +323,8 @@ def print_simulation_summary(model: BookstoreModel):
     print(f"  Avg Transaction: ${summary['average_transaction_value']:,.2f}")
     print(f"  Customers Served: {summary['total_customers_served']}")
     print(f"  Customer Satisfaction: {summary['customer_satisfaction']:.1f}/10")
+    # New discount metrics line (total discounts and average % across all original transaction totals)
+    print(f"  Total Discounts: ${summary['total_discounts_given']:,.2f} (Avg {summary['average_discount_percentage']:.1f}% of original totals)")
     
     print("\n📚 Top Performing Books:")
     for i, book in enumerate(top_books, 1):

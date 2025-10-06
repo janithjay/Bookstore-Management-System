@@ -1,0 +1,150 @@
+<?xml version="1.0"?>
+<Ontology xmlns="http://www.w3.org/2002/07/owl#"
+  xml:base="http://bookstore.example.org/ontology/rules"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     xmlns:swrl="http://www.w3.org/2003/11/swrl#"
+     xmlns:swrlb="http://www.w3.org/2003/11/swrlb#"
+  ontologyIRI="http://bookstore.example.org/ontology/rules">
+
+    <!-- Import main ontology IRI so tooling can align entities -->
+    <imports rdf:resource="http://example.org/bookstore.owl"/>
+
+  <!-- SWRL Rule: Low stock classification -->
+  <!-- Meaning: If a BookItem hasStock value less than 5 then it is inferred to be a LowStockBook -->
+
+  <Declaration>
+    <Class IRI="#LowStockBook"/>
+    <Class IRI="#DiscountedTransaction"/>
+  </Declaration>
+
+    <Axiom>
+      <Annotation>
+        <AnnotationProperty IRI="http://www.w3.org/2000/01/rdf-schema#comment"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#string">Rule: classify a book as LowStockBook when stock below threshold (5).</Literal>
+      </Annotation>
+      <swrl:Imp>
+        <swrl:body>
+          <swrl:AtomList>
+            <rdf:first>
+              <swrl:ClassAtom>
+                <swrl:classPredicate rdf:resource="http://example.org/bookstore.owl#BookItem"/>
+                <swrl:argument1 rdf:resource="urn:swrl#b"/>
+              </swrl:ClassAtom>
+            </rdf:first>
+            <rdf:rest>
+              <swrl:AtomList>
+                <rdf:first>
+                  <swrl:DatavaluedPropertyAtom>
+                    <swrl:propertyPredicate rdf:resource="http://example.org/bookstore.owl#hasStock"/>
+                    <swrl:argument1 rdf:resource="urn:swrl#b"/>
+                    <swrl:argument2 rdf:resource="urn:swrl#s"/>
+                  </swrl:DatavaluedPropertyAtom>
+                </rdf:first>
+                <rdf:rest>
+                  <swrl:AtomList>
+                    <rdf:first>
+                      <swrl:BuiltinAtom>
+                        <swrl:builtin rdf:resource="http://www.w3.org/2003/11/swrlb#lessThan"/>
+                        <swrl:arguments>
+                          <rdf:List>
+                            <rdf:first rdf:resource="urn:swrl#s"/>
+                            <rdf:rest>
+                              <rdf:List>
+                                <rdf:first>
+                                  <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">5</Literal>
+                                </rdf:first>
+                                <rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>
+                              </rdf:List>
+                            </rdf:rest>
+                          </rdf:List>
+                        </swrl:arguments>
+                      </swrl:BuiltinAtom>
+                    </rdf:first>
+                    <rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>
+                  </swrl:AtomList>
+                </rdf:rest>
+              </swrl:AtomList>
+            </rdf:rest>
+          </swrl:AtomList>
+        </swrl:body>
+        <swrl:head>
+          <swrl:AtomList>
+            <rdf:first>
+              <swrl:ClassAtom>
+                <swrl:classPredicate rdf:resource="http://bookstore.example.org/ontology/rules#LowStockBook"/>
+                <swrl:argument1 rdf:resource="urn:swrl#b"/>
+              </swrl:ClassAtom>
+            </rdf:first>
+            <rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>
+          </swrl:AtomList>
+        </swrl:head>
+      </swrl:Imp>
+    </Axiom>
+    <!-- SWRL Rule: Premium customer classification for discount semantics -->
+    <Axiom>
+      <Annotation>
+        <AnnotationProperty IRI="http://www.w3.org/2000/01/rdf-schema#comment"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#string">Rule: classify Premium customer context as DiscountedTransaction.</Literal>
+      </Annotation>
+      <swrl:Imp>
+        <swrl:body>
+          <swrl:AtomList>
+            <rdf:first>
+              <swrl:ClassAtom>
+                <swrl:classPredicate rdf:resource="http://example.org/bookstore.owl#CustomerEntity"/>
+                <swrl:argument1 rdf:resource="urn:swrl#c"/>
+              </swrl:ClassAtom>
+            </rdf:first>
+            <rdf:rest>
+              <swrl:AtomList>
+                <rdf:first>
+                  <swrl:DatavaluedPropertyAtom>
+                    <swrl:propertyPredicate rdf:resource="http://example.org/bookstore.owl#customerType"/>
+                    <swrl:argument1 rdf:resource="urn:swrl#c"/>
+                    <swrl:argument2 rdf:resource="urn:swrl#t"/>
+                  </swrl:DatavaluedPropertyAtom>
+                </rdf:first>
+                <rdf:rest>
+                  <swrl:AtomList>
+                    <rdf:first>
+                      <swrl:BuiltinAtom>
+                        <swrl:builtin rdf:resource="http://www.w3.org/2003/11/swrlb#stringEqualIgnoreCase"/>
+                        <swrl:arguments>
+                          <rdf:List>
+                            <rdf:first rdf:resource="urn:swrl#t"/>
+                            <rdf:rest>
+                              <rdf:List>
+                                <rdf:first>
+                                  <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#string">Premium</Literal>
+                                </rdf:first>
+                                <rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>
+                              </rdf:List>
+                            </rdf:rest>
+                          </rdf:List>
+                        </swrl:arguments>
+                      </swrl:BuiltinAtom>
+                    </rdf:first>
+                    <rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>
+                  </swrl:AtomList>
+                </rdf:rest>
+              </swrl:AtomList>
+            </rdf:rest>
+          </swrl:AtomList>
+        </swrl:body>
+        <swrl:head>
+          <swrl:AtomList>
+            <rdf:first>
+              <swrl:ClassAtom>
+                <swrl:classPredicate rdf:resource="http://bookstore.example.org/ontology/rules#DiscountedTransaction"/>
+                <swrl:argument1 rdf:resource="urn:swrl#c"/>
+              </swrl:ClassAtom>
+            </rdf:first>
+            <rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>
+          </swrl:AtomList>
+        </swrl:head>
+      </swrl:Imp>
+    </Axiom>
+</Ontology>

@@ -33,11 +33,6 @@ pip install -r requirements.txt
 Launch the interactive Streamlit dashboard:
 
 ```bash
-python run_dashboard.py
-```
-
-Or directly:
-```bash
 streamlit run ui/streamlit_app.py
 ```
 

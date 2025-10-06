@@ -28,6 +28,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Ontology / Reasoner status banner
+try:
+    if hasattr(bookstore_ontology, 'reasoning_enabled'):
+        if not getattr(bookstore_ontology, 'reasoner_available', True):
+            st.warning("⚠️ Ontology reasoner fallback mode: Pellet reasoning not active; Python rule logic used.")
+        else:
+            st.info("🧠 Ontology reasoning enabled (Pellet attempted).")
+    else:
+        st.warning("ℹ️ Ontology lightweight mode: Owlready2 not fully available.")
+except Exception:
+    st.warning("ℹ️ Ontology status could not be determined.")
+
 # Custom CSS for better styling
 st.markdown("""
 <style>
@@ -644,7 +656,7 @@ def main():
         
         with col2:
             if st.button("📊 Generate Report", use_container_width=True):
-                st.info("Generating detailed report...")
+                st.info("Generating detailed report coming soon!")
                 # Report generation logic here
         
         with col3:
