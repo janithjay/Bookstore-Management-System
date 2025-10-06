@@ -511,6 +511,11 @@ class BookstoreModel(Model):
                              if isinstance(a, BookAgent) and 
                              a.book_data.stock_quantity <= a.reorder_point])
         
+        # Calculate discount statistics
+        total_discounts = sum(t.discount_applied for t in self.transactions)
+        total_original_amount = sum(t.total_amount for t in self.transactions)
+        avg_discount_percentage = (total_discounts / total_original_amount * 100) if total_original_amount > 0 else 0
+        
         return {
             'simulation_step': self.schedule.steps,
             'simulation_time': f"{self.schedule.steps // 60}h {self.schedule.steps % 60}m",
@@ -524,7 +529,9 @@ class BookstoreModel(Model):
             'low_stock_books': low_stock_books,
             'inventory_alerts': len(self.inventory_alerts),
             'customer_satisfaction': round(self.customer_satisfaction, 2),
-            'customer_visits': len(self.customer_visits)
+            'customer_visits': len(self.customer_visits),
+            'total_discounts_given': round(total_discounts, 2),
+            'average_discount_percentage': round(avg_discount_percentage, 1)
         }
     
     def get_agent_states(self) -> Dict[str, List[Dict[str, Any]]]:
@@ -640,3 +647,58 @@ class BookstoreModel(Model):
             'total_customer_spend': simulation_spent,
             'note': 'Spend values reflect simulation period only, not historical data'
         }
+    
+    def get_recent_transactions(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get recent transactions with discount information
+        
+        Args:
+            limit: Maximum number of transactions to return (default 20)
+            
+        Returns:
+            List of transaction dictionaries with detailed information
+        """
+        recent = self.transactions[-limit:] if len(self.transactions) > limit else self.transactions
+        
+        transaction_list = []
+        for trans in reversed(recent):  # Most recent first
+            # Calculate discount percentage
+            discount_percentage = (trans.discount_applied / trans.total_amount * 100) if trans.total_amount > 0 else 0
+            
+            # Get customer and employee names
+            customer_name = bookstore_ontology.customers.get(trans.customer_id, None)
+            employee_name = bookstore_ontology.employees.get(trans.employee_id, None)
+            
+            # Calculate final amount
+            final_amount = trans.total_amount - trans.discount_applied
+            
+            # Get book details
+            book_details = []
+            for book_item in trans.books:
+                book = bookstore_ontology.books.get(book_item['isbn'])
+                if book:
+                    book_details.append({
+                        'title': book.title,
+                        'isbn': book_item['isbn'],
+                        'quantity': book_item['quantity'],
+                        'unit_price': book_item.get('unit_price', book.price),
+                        'subtotal': book_item['quantity'] * book_item.get('unit_price', book.price)
+                    })
+            
+            transaction_list.append({
+                'transaction_id': trans.transaction_id,
+                'customer_id': trans.customer_id,
+                'customer_name': customer_name.name if customer_name else 'Unknown',
+                'employee_id': trans.employee_id,
+                'employee_name': employee_name.name if employee_name else 'Unknown',
+                'books': book_details,
+                'book_count': len(trans.books),
+                'total_items': sum(book_item['quantity'] for book_item in trans.books),
+                'subtotal': trans.total_amount,
+                'discount_amount': trans.discount_applied,
+                'discount_percentage': round(discount_percentage, 1),
+                'final_amount': final_amount,
+                'transaction_date': trans.transaction_date,
+                'payment_method': trans.payment_method
+            })
+        
+        return transaction_list

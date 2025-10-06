@@ -279,6 +279,41 @@ def display_metrics():
             value=summary['inventory_alerts'],
             delta_color="inverse"
         )
+    
+    # Third row - Discount metrics (if any discounts given)
+    if summary.get('total_discounts_given', 0) > 0:
+        st.markdown("---")
+        col9, col10, col11, col12 = st.columns(4)
+        
+        with col9:
+            st.metric(
+                label="💸 Total Discounts Given",
+                value=f"${summary.get('total_discounts_given', 0):,.2f}"
+            )
+        
+        with col10:
+            st.metric(
+                label="📊 Avg Discount %",
+                value=f"{summary.get('average_discount_percentage', 0):.1f}%"
+            )
+        
+        with col11:
+            # Calculate what revenue would have been without discounts
+            original_revenue = summary['daily_revenue'] + summary.get('total_discounts_given', 0)
+            st.metric(
+                label="💰 Revenue Impact",
+                value=f"−${summary.get('total_discounts_given', 0):,.2f}",
+                delta=f"Would be ${original_revenue:,.2f}",
+                delta_color="inverse"
+            )
+        
+        with col12:
+            # Show customer savings
+            st.metric(
+                label="😊 Customer Savings",
+                value=f"${summary.get('total_discounts_given', 0):,.2f}",
+                delta=f"{summary.get('average_discount_percentage', 0):.1f}% avg"
+            )
 
 
 def display_charts():
@@ -372,7 +407,7 @@ def display_detailed_analytics():
     if not st.session_state.model:
         return
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📚 Top Books", "👥 Employees", "🛒 Customers", "📊 Analytics"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📚 Top Books", "👥 Employees", "🛒 Customers", "🧾 Transactions", "📊 Analytics"])
     
     with tab1:
         st.markdown("### 📚 Top Performing Books")
@@ -428,6 +463,77 @@ def display_detailed_analytics():
             st.dataframe(df_customers, use_container_width=True)
     
     with tab4:
+        st.markdown("### 🧾 Recent Transactions")
+        
+        transactions = st.session_state.model.get_recent_transactions(20)
+        
+        if not transactions:
+            st.info("📋 No transactions yet. Transactions will appear here once customers make purchases.")
+        else:
+            # Summary metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                total_trans = len(transactions)
+                st.metric("Total Transactions", total_trans)
+            with col2:
+                total_discount = sum(t['discount_amount'] for t in transactions)
+                st.metric("Total Discounts Given", f"${total_discount:,.2f}")
+            with col3:
+                avg_discount = sum(t['discount_percentage'] for t in transactions) / len(transactions)
+                st.metric("Avg Discount %", f"{avg_discount:.1f}%")
+            with col4:
+                total_saved = sum(t['discount_amount'] for t in transactions)
+                st.metric("Customer Savings", f"${total_saved:,.2f}")
+            
+            st.markdown("---")
+            
+            # Display transactions in expandable format
+            for trans in transactions:
+                # Color code by discount level
+                if trans['discount_percentage'] >= 15:
+                    discount_badge = "🟢"  # High discount
+                elif trans['discount_percentage'] >= 10:
+                    discount_badge = "🟡"  # Medium discount
+                elif trans['discount_percentage'] > 0:
+                    discount_badge = "🟠"  # Low discount
+                else:
+                    discount_badge = "⚪"  # No discount
+                
+                # Create expander for each transaction
+                with st.expander(
+                    f"{discount_badge} **{trans['transaction_id']}** - "
+                    f"${trans['final_amount']:.2f} "
+                    f"({'−$' + str(trans['discount_amount']) + ' (' + str(trans['discount_percentage']) + '%)' if trans['discount_amount'] > 0 else 'No discount'})"
+                ):
+                    # Transaction details
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown(f"""
+                        **Customer:** {trans['customer_name']}  
+                        **Employee:** {trans['employee_name']}  
+                        **Date:** {trans['transaction_date'].strftime('%Y-%m-%d %H:%M:%S')}  
+                        **Payment:** {trans['payment_method']}
+                        """)
+                    
+                    with col2:
+                        st.markdown(f"""
+                        **Items:** {trans['total_items']} ({trans['book_count']} different books)  
+                        **Subtotal:** ${trans['subtotal']:.2f}  
+                        **Discount:** −${trans['discount_amount']:.2f} ({trans['discount_percentage']:.1f}%)  
+                        **Final Amount:** ${trans['final_amount']:.2f}
+                        """)
+                    
+                    # Books purchased
+                    if trans['books']:
+                        st.markdown("**Books Purchased:**")
+                        books_df = pd.DataFrame(trans['books'])
+                        books_df['subtotal'] = books_df['subtotal'].apply(lambda x: f"${x:.2f}")
+                        books_df['unit_price'] = books_df['unit_price'].apply(lambda x: f"${x:.2f}")
+                        books_df.columns = ['Title', 'ISBN', 'Qty', 'Unit Price', 'Subtotal']
+                        st.dataframe(books_df, use_container_width=True, hide_index=True)
+    
+    with tab5:
         st.markdown("### 📊 Simulation Analytics")
         
         if st.session_state.simulation_data['steps'] and len(st.session_state.simulation_data['steps']) > 0:
