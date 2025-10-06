@@ -28,7 +28,7 @@ pip install -r requirements.txt
 
 ### Running the System
 
-#### Option 1: Web Dashboard (Recommended) 🎨
+#### Web Dashboard 🎨
 
 Launch the interactive Streamlit dashboard:
 
