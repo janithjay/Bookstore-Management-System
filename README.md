@@ -17,7 +17,7 @@ This system simulates a complete bookstore ecosystem using:
 
 1. **Clone the repository**
 ```bash
-git clone <repository-url>
+git clone <https://github.com/janithjay/Bookstore-Management-System?tab=readme-ov-file>
 cd Bookstore-Management-System
 ```
 
