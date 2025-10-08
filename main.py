@@ -1,26 +1,5 @@
 #!/usr/bin/env python3
-"""
-Bookstore Management System with Ontology and Multi-Agent Simulation
-
-Main entry point for running the bookstore simulation. This script provides
-a command-line interface for configuring and running the simulation, as well
-as generating reports and analytics.
-
-Usage:
-    python main.py [options]
-
-Options:
-    --customers N       Number of customer agents (default: 20)
-    --employees N       Number of employee agents (default: 5)
-    --books N          Number of book agents (default: 100)
-    --hours N          Simulation hours (default: 8)
-    --steps N          Max simulation steps (overrides hours)
-    --seed N           Random seed for reproducibility
-    --output DIR       Output directory for reports (default: ./report)
-    --verbose         Enable verbose output
-    --gui             Run with graphical visualization (if available)
-    --report          Generate detailed report at end
-"""
+"""Bookstore simulation with multi-agent system and ontology integration."""
 
 import argparse
 import os
@@ -39,93 +18,29 @@ from ontology.bookstore_ontology import bookstore_ontology
 
 
 def parse_arguments():
-    """Parse command-line arguments"""
     parser = argparse.ArgumentParser(
-        description="Bookstore Management System Simulation",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        description="Bookstore Management System Simulation"
     )
     
-    parser.add_argument(
-        '--customers', 
-        type=int, 
-        default=20, 
-        help='Number of customer agents (default: 20)'
-    )
-    
-    parser.add_argument(
-        '--employees', 
-        type=int, 
-        default=5, 
-        help='Number of employee agents (default: 5)'
-    )
-    
-    parser.add_argument(
-        '--books', 
-        type=int, 
-        default=100, 
-        help='Number of book agents (default: 100)'
-    )
-    
-    parser.add_argument(
-        '--hours', 
-        type=int, 
-        default=8, 
-        help='Simulation hours (default: 8)'
-    )
-    
-    parser.add_argument(
-        '--steps', 
-        type=int, 
-        help='Max simulation steps (overrides hours)'
-    )
-    
-    parser.add_argument(
-        '--seed', 
-        type=int, 
-        help='Random seed for reproducibility'
-    )
-    
-    parser.add_argument(
-        '--output', 
-        type=str, 
-        default='./report', 
-        help='Output directory for reports (default: ./report)'
-    )
-    
-    parser.add_argument(
-        '--verbose', 
-        action='store_true', 
-        help='Enable verbose output'
-    )
-    
-    parser.add_argument(
-        '--gui', 
-        action='store_true', 
-        help='Run with graphical visualization (if available)'
-    )
-    
-    parser.add_argument(
-        '--report', 
-        action='store_true', 
-        help='Generate detailed report at end'
-    )
-    
-    parser.add_argument(
-        '--quick', 
-        action='store_true', 
-        help='Run quick simulation (1 hour, fewer agents)'
-    )
+    parser.add_argument('--customers', type=int, default=20, help='Number of customer agents')
+    parser.add_argument('--employees', type=int, default=5, help='Number of employee agents')
+    parser.add_argument('--books', type=int, default=100, help='Number of book agents')
+    parser.add_argument('--hours', type=int, default=8, help='Simulation hours')
+    parser.add_argument('--steps', type=int, help='Max simulation steps')
+    parser.add_argument('--seed', type=int, help='Random seed for reproducibility')
+    parser.add_argument('--output', type=str, default='./report', help='Output directory')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('--gui', action='store_true', help='Run with GUI')
+    parser.add_argument('--report', action='store_true', help='Generate detailed report')
+    parser.add_argument('--quick', action='store_true', help='Quick simulation (1 hour, fewer agents)')
     
     return parser.parse_args()
 
 
 def setup_output_directory(output_dir: str) -> Path:
-    """Setup output directory for reports"""
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    # Create subdirectories
     (output_path / 'data').mkdir(exist_ok=True)
     (output_path / 'charts').mkdir(exist_ok=True)
     (output_path / 'logs').mkdir(exist_ok=True)
@@ -134,7 +49,6 @@ def setup_output_directory(output_dir: str) -> Path:
 
 
 def print_simulation_header(args):
-    """Print simulation configuration header"""
     print("=" * 60)
     print("BOOKSTORE MANAGEMENT SYSTEM SIMULATION")
     print("=" * 60)
@@ -151,9 +65,8 @@ def print_simulation_header(args):
 
 
 def run_simulation(model: BookstoreModel, args, output_path: Path):
-    """Run the main simulation loop"""
     start_time = time.time()
-    step_interval = 60 if args.verbose else 120  # Print progress every N steps
+    step_interval = 60 if args.verbose else 120
     
     print(f"Starting simulation at {datetime.now().strftime('%H:%M:%S')}")
     print("Press Ctrl+C to stop simulation early\n")

@@ -1,11 +1,4 @@
-"""
-Customer Agent
-
-This module implements the customer agent for the bookstore management system.
-Customer agents represent individual customers with behaviors like browsing,
-purchasing, and interacting with the bookstore environment. Includes message bus
-integration for agent communication.
-"""
+"""Customer agent with browsing, purchasing, and interaction behaviors."""
 
 import random
 from typing import List, Dict, Any, Optional
@@ -19,44 +12,24 @@ from communication.message_bus import message_bus, MessageType, Message
 
 
 class CustomerAgent(Agent):
-    """
-    Customer agent that represents a customer in the bookstore simulation.
-    
-    Behaviors:
-    - Browse books based on preferences
-    - Make purchasing decisions
-    - Interact with employees
-    - Build loyalty over time
-    """
+    """Customer agent with browsing, purchasing, and loyalty tracking."""
     
     def __init__(self, unique_id: int, model, customer_data: Customer):
-        """
-        Initialize a customer agent.
-        
-        Args:
-            unique_id: Unique identifier for the agent
-            model: The Mesa model instance
-            customer_data: Customer ontology data
-        """
         super().__init__(model)
         self.unique_id = unique_id
         self.customer_data = customer_data
         
-        # Register with message bus
         agent_id = f"customer_{unique_id}"
         message_bus.register_agent(agent_id)
         
-        # Subscribe to relevant message types
         message_bus.subscribe(agent_id, MessageType.PRICE_UPDATE, self._handle_price_update)
         message_bus.subscribe(agent_id, MessageType.LOW_STOCK_ALERT, self._handle_stock_alert)
         
-        # Behavioral attributes
         self.preferred_categories = self._generate_preferences()
         self.budget = self._generate_budget()
-        self.shopping_patience = random.randint(5, 20)  # Steps before leaving
+        self.shopping_patience = random.randint(5, 20)
         self.current_patience = self.shopping_patience
         
-        # Shopping state
         self.shopping_cart: List[Dict[str, Any]] = []
         self.is_shopping = True
         self.current_activity = "browsing"
@@ -87,11 +60,9 @@ class CustomerAgent(Agent):
         return random.uniform(min_budget, max_budget)
     
     def step(self):
-        """Execute one step of customer behavior"""
         if not self.is_shopping:
             return
         
-        # Process messages from other agents
         agent_id = f"customer_{self.unique_id}"
         message_bus.process_messages(agent_id)
         
@@ -101,7 +72,6 @@ class CustomerAgent(Agent):
             self._leave_store()
             return
         
-        # Decide on action based on current activity
         if self.current_activity == "browsing":
             self._browse_books()
         elif self.current_activity == "evaluating":
@@ -112,24 +82,19 @@ class CustomerAgent(Agent):
             self._seek_employee_help()
     
     def _handle_price_update(self, message: Message):
-        """Handle price update messages"""
         isbn = message.content.get('isbn')
         new_price = message.content.get('new_price')
         
-        # Check if this book is in our cart
         for item in self.shopping_cart:
             if item['isbn'] == isbn:
                 item['price'] = new_price
-                # Re-evaluate if we still want this book
                 if new_price > self.budget * self.price_sensitivity:
                     self.shopping_cart.remove(item)
                     print(f"Customer {self.unique_id} removed book {isbn} due to price increase")
     
     def _handle_stock_alert(self, message: Message):
-        """Handle low stock alerts"""
         isbn = message.content.get('isbn')
         
-        # If we're interested in this book, prioritize purchase
         for item in self.shopping_cart:
             if item['isbn'] == isbn:
                 if self.current_activity == "browsing":
@@ -138,7 +103,6 @@ class CustomerAgent(Agent):
                 break
     
     def _browse_books(self):
-        """Browse available books based on preferences"""
         available_books = self._get_available_books()
         
         if not available_books:

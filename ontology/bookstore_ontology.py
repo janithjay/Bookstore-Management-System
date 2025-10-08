@@ -1,10 +1,4 @@
-"""
-Bookstore Ontology Definition with Owlready2 Integration
-
-This module defines the ontological structure for the bookstore management system,
-including concepts, relationships, and properties for books, customers, employees,
-and bookstore operations using Owlready2 for formal ontology representation.
-"""
+"""Bookstore ontology with Owlready2 integration for formal knowledge representation."""
 
 import os
 from typing import Dict, List, Any
@@ -13,7 +7,6 @@ from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime
 
-# Owlready2 imports for ontology management
 try:
     from owlready2 import *
     OWLREADY_AVAILABLE = True
@@ -23,7 +16,6 @@ except ImportError:
 
 
 class BookCategory(Enum):
-    """Enumeration of book categories"""
     FICTION = "Fiction"
     NON_FICTION = "Non-Fiction"
     SCIENCE = "Science"
@@ -39,7 +31,6 @@ class BookCategory(Enum):
 
 
 class CustomerType(Enum):
-    """Enumeration of customer types"""
     REGULAR = "Regular"
     PREMIUM = "Premium"
     STUDENT = "Student"
@@ -47,7 +38,6 @@ class CustomerType(Enum):
 
 
 class EmployeeRole(Enum):
-    """Enumeration of employee roles"""
     CASHIER = "Cashier"
     SALES_ASSOCIATE = "Sales Associate"
     MANAGER = "Manager"

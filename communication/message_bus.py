@@ -1,10 +1,4 @@
-"""
-Message Bus System for Agent Communication
-
-This module implements a message bus system that allows agents to communicate
-with each other through structured messages for inventory updates, restock
-notifications, and other bookstore operations.
-"""
+"""Message bus system for agent communication with priority queuing."""
 
 from typing import Dict, List, Any, Callable, Optional
 from dataclasses import dataclass
@@ -15,7 +9,6 @@ from queue import Queue
 
 
 class MessageType(Enum):
-    """Enumeration of message types"""
     INVENTORY_UPDATE = "inventory_update"
     RESTOCK_REQUEST = "restock_request"
     PURCHASE_COMPLETED = "purchase_completed"
@@ -27,27 +20,22 @@ class MessageType(Enum):
 
 @dataclass
 class Message:
-    """Message structure for agent communication"""
     message_id: str
     sender_id: str
     recipient_id: str
     message_type: MessageType
     content: Dict[str, Any]
     timestamp: datetime
-    priority: int = 1  # 1 = low, 5 = high
+    priority: int = 1
     processed: bool = False
     
     def __post_init__(self):
-        """Validate message priority"""
         if not 1 <= self.priority <= 5:
             self.priority = 1
 
 
 class MessageBus:
-    """
-    Central message bus for agent communication.
-    Handles message routing, queuing, and delivery between agents.
-    """
+    """Central message bus for routing and delivering messages between agents."""
     
     def __init__(self):
         """Initialize the message bus"""

@@ -1,7 +1,4 @@
-"""
-Bookstore Management System - Streamlit Dashboard
-Production-ready UI for simulation monitoring and control
-"""
+"""Bookstore simulation dashboard with real-time monitoring and control."""
 
 import streamlit as st
 import sys
@@ -20,7 +17,6 @@ sys.path.insert(0, str(project_root))
 from simulation.bookstore_model import BookstoreModel
 from ontology.bookstore_ontology import bookstore_ontology
 
-# Page configuration
 st.set_page_config(
     page_title="Bookstore Simulation Dashboard",
     page_icon="📚",
@@ -28,19 +24,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Ontology / Reasoner status banner
 try:
     if hasattr(bookstore_ontology, 'reasoning_enabled'):
         if not getattr(bookstore_ontology, 'reasoner_available', True):
             st.warning("⚠️ Ontology reasoner fallback mode: Pellet reasoning not active; Python rule logic used.")
         else:
             st.info("🧠 Ontology reasoning enabled (Pellet attempted).")
-    else:
-        st.warning("ℹ️ Ontology lightweight mode: Owlready2 not fully available.")
 except Exception:
-    st.warning("ℹ️ Ontology status could not be determined.")
+    pass
 
-# Custom CSS for better styling
 st.markdown("""
 <style>
     .main-header {
@@ -64,7 +56,6 @@ st.markdown("""
 
 
 def initialize_session_state():
-    """Initialize session state variables"""
     if 'model' not in st.session_state:
         st.session_state.model = None
     if 'running' not in st.session_state:
@@ -83,11 +74,9 @@ def initialize_session_state():
 
 
 def create_sidebar():
-    """Create sidebar with configuration controls"""
     with st.sidebar:
         st.markdown("## ⚙️ Simulation Configuration")
         
-        # Simulation parameters
         st.markdown("### 📊 Agent Configuration")
         num_customers = st.slider("Number of Customers", 5, 100, 20, 5)
         num_employees = st.slider("Number of Employees", 2, 20, 5, 1)

@@ -1,11 +1,4 @@
-"""
-Book Agent
-
-This module implements the book agent for the bookstore management system.
-Book agents represent individual books with behaviors like demand simulation,
-pricing dynamics, and popularity tracking. Includes message bus integration
-for inventory alerts and price updates.
-"""
+"""Book agent with demand simulation, pricing dynamics, and inventory alerts."""
 
 import random
 from typing import Dict, Any, List
@@ -17,34 +10,16 @@ from communication.message_bus import message_bus, MessageType, Message
 
 
 class BookAgent(Agent):
-    """
-    Book agent that represents a book in the bookstore simulation.
-    
-    Behaviors:
-    - Track popularity and demand
-    - Simulate seasonal effects
-    - Price elasticity simulation
-    - Inventory alerts
-    """
+    """Book agent with demand tracking, pricing, and inventory management."""
     
     def __init__(self, unique_id: int, model, book_data: Book):
-        """
-        Initialize a book agent.
-        
-        Args:
-            unique_id: Unique identifier for the agent
-            model: The Mesa model instance
-            book_data: Book ontology data
-        """
         super().__init__(model)
         self.unique_id = unique_id
         self.book_data = book_data
         
-        # Register with message bus
         agent_id = f"book_{book_data.isbn}"
         message_bus.register_agent(agent_id)
         
-        # Market dynamics attributes
         self.base_demand = self._calculate_base_demand()
         self.current_demand = self.base_demand
         self.popularity_score = random.uniform(0.1, 1.0)
@@ -73,14 +48,11 @@ class BookAgent(Agent):
         # Competition and market factors
         self.market_competition = random.uniform(0.5, 1.5)
         self.customer_reviews_score = random.uniform(3.0, 5.0)
-        
-        # Analytics tracking
         self.demand_history = []
         self.price_history = []
         self.stock_history = []
     
     def _calculate_base_demand(self) -> float:
-        """Calculate base demand based on book characteristics"""
         category_demand = {
             BookCategory.FICTION: 0.8,
             BookCategory.MYSTERY: 0.7,
@@ -97,17 +69,12 @@ class BookAgent(Agent):
         }
         
         base = category_demand.get(self.book_data.category, 0.5)
-        
-        # Adjust for price (higher price generally means lower demand)
         price_factor = max(0.1, 1.0 - (self.book_data.price / 100))
-        
-        # Random variation
         random_factor = random.uniform(0.8, 1.2)
         
         return base * price_factor * random_factor
     
     def _calculate_price_elasticity(self) -> float:
-        """Calculate price elasticity based on book type"""
         elasticity_map = {
             BookCategory.TEXTBOOK: -0.3,  # Less elastic (essential)
             BookCategory.REFERENCE: -0.3,
@@ -146,39 +113,25 @@ class BookAgent(Agent):
                               {'fall': 1.0, 'spring': 1.0, 'summer': 1.0, 'winter': 1.0})
     
     def step(self):
-        """Execute one step of book behavior"""
-        # Update demand based on various factors
         self._update_demand()
-        
-        # Update pricing if needed
         self._update_pricing()
-        
-        # Check inventory levels and send alerts if needed
         self._check_inventory_and_alert()
-        
-        # Update popularity based on sales
         self._update_popularity()
-        
-        # Record analytics
         self._record_analytics()
         
-        # Update counters
         if self.daily_sales == 0:
             self.days_since_last_sale += 1
         else:
             self.days_since_last_sale = 0
         
-        # Check if out of stock
         if self.book_data.stock_quantity == 0:
             self.days_out_of_stock += 1
         else:
             self.days_out_of_stock = 0
     
     def _check_inventory_and_alert(self):
-        """Check inventory levels and send alerts using message bus"""
         stock_level = self.book_data.stock_quantity
         
-        # Send low stock alert if stock is below threshold
         if stock_level <= 5 and stock_level > 0:
             message_bus.publish(
                 f"book_{self.book_data.isbn}",
@@ -211,18 +164,7 @@ class BookAgent(Agent):
             )
     
     def process_sale(self, quantity: int = 1, customer_id: str = None) -> bool:
-        """
-        Process a book sale and apply SWRL rules
-        
-        Args:
-            quantity: Number of books sold
-            customer_id: ID of the customer making the purchase
-            
-        Returns:
-            True if sale successful, False otherwise
-        """
         if self.book_data.stock_quantity >= quantity:
-            # Apply SWRL rule for purchase reducing stock
             if hasattr(bookstore_ontology, 'owl_ontology') and bookstore_ontology.owl_ontology:
                 rule_result = bookstore_ontology.owl_ontology.apply_swrl_rule(
                     'purchase_reduces_stock',
@@ -231,20 +173,16 @@ class BookAgent(Agent):
                     quantity=quantity
                 )
             
-            # Update stock in book data
             self.book_data.stock_quantity -= quantity
             
-            # Update inventory object in ontology
             if self.book_data.isbn in bookstore_ontology.inventory:
                 bookstore_ontology.inventory[self.book_data.isbn].current_stock = self.book_data.stock_quantity
                 bookstore_ontology.inventory[self.book_data.isbn].last_restocked = datetime.now()
             
-            # Update sales tracking
             self.daily_sales += quantity
             self.weekly_sales += quantity
             self.total_sales += quantity
             
-            # Send inventory update message
             message_bus.publish(
                 f"book_{self.book_data.isbn}",
                 MessageType.INVENTORY_UPDATE,

@@ -1,11 +1,4 @@
-"""
-Bookstore Model
-
-This module implements the Mesa-based simulation model for the bookstore management system.
-It orchestrates the interactions between customers, employees, and books, while tracking
-various metrics and analytics. Includes Owlready2 ontology integration and message bus
-communication system.
-"""
+"""Mesa-based bookstore simulation model with agent orchestration and metrics tracking."""
 
 import random
 from typing import Dict, List, Any, Optional
@@ -26,16 +19,7 @@ from communication.message_bus import message_bus, MessageType
 
 
 class BookstoreModel(Model):
-    """
-    Main simulation model for the bookstore management system.
-    
-    This model manages:
-    - Customer, employee, and book agents
-    - Transaction processing
-    - Inventory management
-    - Performance analytics
-    - Business metrics tracking
-    """
+    """Main simulation model managing customer, employee, and book agents with transaction processing."""
     
     def __init__(
         self,
@@ -45,16 +29,6 @@ class BookstoreModel(Model):
         simulation_hours: int = 8,
         seed: Optional[int] = None
     ):
-        """
-        Initialize the bookstore simulation model.
-        
-        Args:
-            num_customers: Number of customer agents to create
-            num_employees: Number of employee agents to create
-            num_books: Number of book agents to create
-            simulation_hours: Hours to simulate
-            seed: Random seed for reproducibility
-        """
         super().__init__()
         
         if seed is not None:

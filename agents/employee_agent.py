@@ -1,11 +1,4 @@
-"""
-Employee Agent
-
-This module implements the employee agent for the bookstore management system.
-Employee agents represent staff members with different roles and responsibilities
-like processing transactions, helping customers, and managing inventory.
-Includes message bus integration for agent communication.
-"""
+"""Employee agent with transaction processing, customer assistance, and inventory management."""
 
 import random
 from typing import List, Dict, Any, Optional
@@ -19,68 +12,41 @@ from communication.message_bus import message_bus, MessageType, Message
 
 
 class EmployeeAgent(Agent):
-    """
-    Employee agent that represents a staff member in the bookstore simulation.
-    
-    Behaviors:
-    - Process customer transactions
-    - Assist customers with inquiries
-    - Manage inventory (for certain roles)
-    - Performance tracking
-    """
+    """Employee agent with role-based task handling and performance tracking."""
     
     def __init__(self, unique_id: int, model, employee_data: Employee):
-        """
-        Initialize an employee agent.
-        
-        Args:
-            unique_id: Unique identifier for the agent
-            model: The Mesa model instance
-            employee_data: Employee ontology data
-        """
         super().__init__(model)
         self.unique_id = unique_id
         self.employee_data = employee_data
         
-        # Register with message bus
         agent_id = f"employee_{unique_id}"
         message_bus.register_agent(agent_id)
         
-        # Subscribe to relevant message types based on role
         message_bus.subscribe(agent_id, MessageType.RESTOCK_REQUEST, self._handle_restock_request)
         message_bus.subscribe(agent_id, MessageType.CUSTOMER_INQUIRY, self._handle_customer_inquiry)
         message_bus.subscribe(agent_id, MessageType.EMPLOYEE_ASSIGNMENT, self._handle_assignment)
         
-        # Inventory clerks and managers get low stock alerts
         if employee_data.role in [EmployeeRole.INVENTORY_CLERK, EmployeeRole.MANAGER]:
             message_bus.subscribe(agent_id, MessageType.LOW_STOCK_ALERT, self._handle_low_stock_alert)
         
-        # Work state attributes
         self.is_busy = False
         self.current_customer = None
         self.current_task = "available"
         self.task_duration = 0
-        self.shift_hours = 8  # 8-hour shift
+        self.shift_hours = 8
         self.hours_worked = 0
-        self.pending_restock = None  # Store restock info
+        self.pending_restock = None
         
-        # Performance attributes
         self.daily_sales = 0.0
         self.customers_served = 0
         self.transactions_processed = 0
-        self.customer_satisfaction_score = 5.0  # Out of 10
+        self.customer_satisfaction_score = 5.0
         
-        # Role-specific capabilities
         self.capabilities = self._get_role_capabilities()
-        
-        # Work efficiency based on role and experience
         self.efficiency = self._calculate_efficiency()
-        
-        # Customer interaction history
         self.interaction_history = []
     
     def _get_role_capabilities(self) -> List[str]:
-        """Get capabilities based on employee role"""
         role_capabilities = {
             EmployeeRole.CASHIER: ['process_transaction', 'handle_returns', 'customer_service'],
             EmployeeRole.SALES_ASSOCIATE: ['customer_assistance', 'product_recommendation', 
