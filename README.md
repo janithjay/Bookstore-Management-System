@@ -35,6 +35,7 @@ cd Bookstore-Management-System
 python -m venv venv
 
 venv\Scripts\activate
+```
 
 
 3. **Install dependencies**
