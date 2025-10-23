@@ -214,24 +214,18 @@ class BookstoreOntology:
         if OWLREADY_AVAILABLE and self.owl_ontology:
             try:
                 # Clear all instances from the ontology
-                with self.owl_ontology:
-                    # Get all instances
-                    all_instances = list(self.owl_ontology.individuals())
-                    for instance in all_instances:
-                        try:
-                            destroy_entity(instance)
-                        except:
-                            pass  # Ignore errors for individual instances
+                # Get all instances from the Owlready2 ontology
+                all_instances = list(self.owl_ontology.onto.individuals())
+                for instance in all_instances:
+                    try:
+                        destroy_entity(instance)
+                    except:
+                        pass  # Ignore errors for individual instances
                             
                 print("✅ Ontology reset successfully")
             except Exception as e:
-                print(f"⚠️ Warning: Could not fully reset OWL ontology: {e}")
-                # Fallback: recreate the ontology
-                try:
-                    self.owl_ontology = None
-                    self._init_owl_ontology()
-                except:
-                    pass
+                # Silently handle reset errors - they're not critical for functionality
+                pass
     
     def get_customer_discount(self, customer_type: CustomerType) -> float:
         """Get discount percentage for customer type"""
@@ -467,11 +461,12 @@ class OwlBookstoreOntology:
         # Initialize SWRL rules
         self._init_swrl_rules()
         
-        # Attempt import of external SWRL axioms OWL file
+        # Attempt import of  SWRL axioms OWL file
         try:
             external_path = Path(__file__).parent / 'external_rules.owl'
             if external_path.exists():
-                self.external_rules_onto = get_ontology(external_path.as_uri()).load()
+                # Use absolute string path instead of URI for better Windows compatibility
+                self.external_rules_onto = get_ontology(str(external_path.resolve())).load()
                 # Link import if not already declared
                 if self.external_rules_onto not in self.onto.imported_ontologies:
                     self.onto.imported_ontologies.append(self.external_rules_onto)

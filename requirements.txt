@@ -1,5 +1,3 @@
-# Bookstore Management System - Requirements
-analyze the ecodebase and check the numbers are not matching. that means there is a mismatch 
 # Core simulation framework - Mesa 3.0+ for latest agent-based modeling
 mesa>=3.0.0
 
